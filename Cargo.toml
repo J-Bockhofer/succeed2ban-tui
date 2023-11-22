@@ -35,3 +35,4 @@ tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "serde"] }
 tui-input = { version = "0.8.0", features = ["serde"] }
 notify = "6.1.1"
+regex = "1.10.2"

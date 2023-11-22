@@ -15,6 +15,8 @@ use crate::{
 use tui_input::{backend::crossterm::EventHandler, Input};
 use log::error;
 
+use regex::Regex;
+
 #[derive(Default)]
 struct StatefulList<T> {
   state: ListState,
@@ -87,6 +89,7 @@ pub struct Home<'a> {
   items: StatefulList<(&'a str, usize)>,
   available_actions: StatefulList<(&'a str, usize)>,
   iostreamed: StatefulList<(String, usize)>, // do i need a tuple here?
+  iplist: StatefulList<(String, usize)>,
   pub last_events: Vec<KeyEvent>,
   pub keymap: HashMap<KeyEvent, Action>,
   pub input: Input,
@@ -99,6 +102,10 @@ impl<'a> Home<'a> {
   }
 
   pub fn set_items(mut self) -> Self {
+    self.iplist = StatefulList::with_items(vec![
+      (String::from("789.555.555.555"), 1),
+      (String::from("160.203.44.55"), 2),
+    ]);  
     self.items = StatefulList::with_items(vec![
       ("Item0", 1),
       ("Item1", 2),
@@ -223,8 +230,23 @@ impl Component for Home<'_> {
       Action::EnterProcessing => {self.mode = Mode::Processing;},
       Action::ExitProcessing => {self.mode = Mode::Normal;},
       Action::IONotify(x) => {
+        let  y = x.clone();
         self.iostreamed.items.push((x,1));
         self.iostreamed.trim_to_length(20);
+
+        let re = Regex::new(r"(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})").unwrap();
+        let results: Vec<&str> = re
+          .captures_iter(&y)
+          .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
+          .collect();
+        if !results.is_empty() {
+          let cip = results[0];
+          self.iplist.items.push((String::from(cip),1));
+          self.iplist.trim_to_length(10);
+
+        }
+        
+
       },
       _ => {},
     }
@@ -298,11 +320,11 @@ impl Component for Home<'_> {
 
 
     let items: Vec<ListItem> = self
-    .items
+    .iplist      // .items
     .items
     .iter()
     .map(|i| {
-        let mut lines = vec![Line::from(i.0)];
+        let mut lines = vec![Line::from(i.0.as_str())]; // let mut lines = vec![Line::from(i.0)];
         for _ in 0..i.1 {
             lines.push(
                 "X"

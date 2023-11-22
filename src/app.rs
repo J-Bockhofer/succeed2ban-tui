@@ -52,7 +52,7 @@ impl App {
 
 
     tokio::spawn(async move {
-      let path = String::from("/home/projects/ratui/text.txt");
+      let path = String::from("/var/log/fail2ban.log"); // easy test "/home/projects/ratui/text.txt"
       //println!("now running on a worker thread");
       let _resp = tasks::notify_change(&path, action_tx2.clone()).await.unwrap_or_else(|err| {
         action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
