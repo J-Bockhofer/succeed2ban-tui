@@ -11,6 +11,8 @@ pub mod mode;
 pub mod tui;
 pub mod utils;
 pub mod tasks;
+pub mod geofetcher;
+pub mod gen_structs;
 
 use clap::Parser;
 use cli::Cli;

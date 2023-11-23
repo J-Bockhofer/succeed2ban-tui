@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::gen_structs;
+
 use serde::{
   de::{self, Deserializer, Visitor},
   Deserialize, Serialize,
@@ -21,6 +23,12 @@ pub enum Action {
   EnterProcessing,
   ExitProcessing,
   IONotify(String),
+  //FetchGeo(gen_structs::Geodata),
+
+  GotGeo(gen_structs::Geodata),
+  Ban,
+  BanIP(String),
+  Banned(bool),
 }
 
 impl<'de> Deserialize<'de> for Action {

@@ -57,9 +57,9 @@ pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>) -> Res
                     //println!("> {:?}", cline);
                     msgs.push(cline.clone());                   
                 }
-                let addedlines = msgs.into_iter().collect::<Vec<String>>().join("\n");
+                let addedlines = msgs.into_iter().collect::<Vec<String>>().join("++++");
                 //println!("> {}", addedlines);
-                _event_tx.send(Action::IONotify(String::from(addedlines))).unwrap();
+                _event_tx.send(Action::IONotify(addedlines)).unwrap();
             }
             Err(error) => println!("{error:?}"),
         }
