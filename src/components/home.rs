@@ -26,8 +26,6 @@ struct StatefulList<T> {
   items: Vec<T>,
 }
 
-const MAX_LENGTH: usize = 10;
-
 impl<T> StatefulList<T> {
   fn with_items(items: Vec<T>) -> StatefulList<T> {
       StatefulList {
@@ -91,7 +89,8 @@ pub struct Home<'a> {
   config: Config,
   items: StatefulList<(&'a str, usize)>,
   available_actions: StatefulList<(&'a str, String)>,
-  iostreamed: StatefulList<(String, usize)>, // do i need a tuple here?
+  iostreamed: StatefulList<(String, usize)>, // do i need a tuple here? // CHANGED
+  //iostreamed: Vec<(String, usize)>,
   iplist: StatefulList<(String, String)>,
   pub last_events: Vec<KeyEvent>,
   pub keymap: HashMap<KeyEvent, Action>,
@@ -106,6 +105,10 @@ pub struct Home<'a> {
   home_lon: f64,
 
   infotext: String,
+  elapsed_notify: usize,
+
+  styledio: Vec<ListItem<'a>>,
+
 }
 
 impl<'a> Home<'a> {
@@ -187,6 +190,66 @@ impl<'a> Home<'a> {
     //let geolat = geodat.get("lat").unwrap();
     //let geolon = geodat.get("lon").unwrap();
     //let geoisp = geodat.get("isp").unwrap();
+  }
+
+  // lifetimes out the wazooo
+  // pub fn highlight_io<'b>(&'b mut self) where 'b: 'a, {
+
+  pub fn highlight_io(&mut self) -> Vec<ListItem> {
+
+    let iolines: Vec<ListItem> = self
+    .iostreamed
+    .items // change stateful list to simple vector CHANGED
+    .iter()
+    .map(|i| {
+        // split regex logic here
+        let collected: Vec<&str> = i.0.split("++++").collect();
+        let mut lines: Line = Line::default();
+        
+        for line in collected {
+          let mut splitword: &str = "(/%&$§";
+          let ip_re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
+          let results: Vec<&str> = ip_re
+            .captures_iter(&line)
+            .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
+            .collect();
+          let mut cip: &str="";
+          if !results.is_empty() {
+            // assume only left and right side - not multiple ips in one line
+            // assume splitword is on left of ip --- lay out of fail2ban sshd
+            cip = results[0];
+            let ban_re = Regex::new(r"Ban").unwrap();
+            let found_re = Regex::new(r"Found").unwrap();
+            if ban_re.is_match(&line) {splitword = "Ban";}
+            else if found_re.is_match(&line)  {splitword = "Found";}
+            let fparts: Vec<&str> = line.split(cip).collect();
+            let sparts: Vec<&str> = fparts[0].split(splitword).collect();
+
+            let startspan = Span::styled(sparts[0], Style::default().fg(Color::White));
+            lines.spans.push(startspan);
+
+            if sparts.len() > 1 {
+              // Found or Ban
+              let splitspan = Span::styled(format!("{} ",splitword), Style::default().fg(Color::LightCyan));
+              lines.spans.push(splitspan);
+            }
+            if fparts.len() > 1 {
+              let ipspan = Span::styled(cip, Style::default().fg(Color::LightRed));
+              lines.spans.push(ipspan);
+              let endspan = Span::styled(fparts[1], Style::default().fg(Color::White));
+              lines.spans.push(endspan);
+            }
+          }
+        }
+        //let lines = vec![Line::from(i.0.as_str())];
+        ListItem::new(lines).style(Style::default().fg(Color::White))
+    })
+    .collect();
+
+    //self.styledio = iolines;
+
+    iolines
+
   }
 
 
@@ -286,9 +349,20 @@ impl Component for Home<'_> {
       Action::EnterProcessing => {self.mode = Mode::Processing;},
       Action::ExitProcessing => {self.mode = Mode::Normal;},
       Action::IONotify(x) => {
-        self.iostreamed.items.push((x.clone(),1));
+        // CHANGED self.iostreamed.items.push((x.clone(),1));
+        self.iostreamed.items.push((x.clone(),1)); // this introduces the extra CPU load
         self.iostreamed.trim_to_length(20);
+
         
+        // call function to split string
+        let styledio = self.highlight_io();
+/*         for item in styledio {
+          self.styledio.push(item.clone());
+        } */
+
+        //self.styledio = styledio.clone();
+      
+        self.elapsed_notify += 1;
       },
       Action::GotGeo(x) => {
 
@@ -440,63 +514,26 @@ impl Component for Home<'_> {
         .highlight_symbol(">> ");
 
       // Widget for IO STREAM
+      // string highlighting function got made here... and is borked
       let iolines: Vec<ListItem> = self
-      .iostreamed
-      .items
-      .iter()
-      .map(|i| {
-          // split regex logic here
-          let collected: Vec<&str> = i.0.split("++++").collect();
-          let mut lines: Line = Line::default();
-          
-          for line in collected {
-            let mut splitword: &str = "(/%&$§";
-            let ip_re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
-            let results: Vec<&str> = ip_re
-              .captures_iter(&line)
-              .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
-              .collect();
-            let mut cip: &str="";
-            if !results.is_empty() {
-              // assume only left and right side - not multiple ips in one line
-              // assume splitword is on left of ip --- lay out of fail2ban sshd
-              cip = results[0];
-              let ban_re = Regex::new(r"Ban").unwrap();
-              let found_re = Regex::new(r"Found").unwrap();
-              if ban_re.is_match(&line) {splitword = "Ban";}
-              else if found_re.is_match(&line)  {splitword = "Found";}
-              let fparts: Vec<&str> = line.split(cip).collect();
-              let sparts: Vec<&str> = fparts[0].split(splitword).collect();
-
-              let startspan = Span::styled(sparts[0], Style::default().fg(Color::White));
-              lines.spans.push(startspan);
-
-              if sparts.len() > 1 {
-                // Found or Ban
-                let splitspan = Span::styled(format!("{} ",splitword), Style::default().fg(Color::LightCyan));
-                lines.spans.push(splitspan);
-              }
-              if fparts.len() > 1 {
-                let ipspan = Span::styled(cip, Style::default().fg(Color::LightRed));
-                lines.spans.push(ipspan);
-                let endspan = Span::styled(fparts[1], Style::default().fg(Color::White));
-                lines.spans.push(endspan);
-              }
-            }
-          }
-
-          //let lines = vec![Line::from(i.0.as_str())];
-          ListItem::new(lines).style(Style::default().fg(Color::White))
-      })
-      .collect();
+        .iostreamed
+        .items // change stateful list to simple vector CHANGED
+        .iter()
+        .map(|i| {
+          ListItem::new(Line::from(i.0.as_str())).style(Style::default().fg(Color::White))
+        })
+        .collect();
   
+
+
+
       let iolist_title = Line::from(vec![
         Span::styled(" I/O Stream [ ", Style::default().fg(Color::White)),
         Span::styled(animsymbols[self.elapsed_rticks],Style::default().fg(Color::Green)),
         Span::styled(" ] ", Style::default().fg(Color::White)),
       ]);
       // Create a List from all list items and highlight the currently selected one
-      let iolist = List::new(iolines)
+      let iolist = List::new( iolines) //self.styledio.clone()
           .block(Block::default()
             .borders(Borders::ALL)
             .border_style( 
@@ -514,7 +551,7 @@ impl Component for Home<'_> {
           .highlight_symbol(">> ");
 
       
-      let infoblock = Paragraph::new(self.infotext.clone())
+      let infoblock = Paragraph::new(format!("{}--{}",self.infotext.clone(), self.elapsed_notify.to_string()))
         .set_style(Style::new().green())
         .block(Block::default()
         .borders(Borders::ALL)
@@ -524,7 +561,8 @@ impl Component for Home<'_> {
     f.render_widget(self.map_canvas(), right_layout[0]);
 
     // Draw Read file to right_lower = 1
-    f.render_stateful_widget(iolist, right_layout[1], &mut self.iostreamed.state);
+    f.render_stateful_widget(iolist, right_layout[1], &mut self.iostreamed.state); // CHANGED 
+    // f.render_widget(iolist, right_layout[1]);
     
     f.render_widget(infoblock, left_layout[0]);
 

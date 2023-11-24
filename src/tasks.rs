@@ -7,6 +7,9 @@ use tokio::{
 
 use crate::action::Action;
 
+use tokio::io::AsyncSeekExt;
+use tokio::io::AsyncReadExt;
+
 
 pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>) -> Result<()> {
     // get file
@@ -68,3 +71,39 @@ pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>) -> Res
     Ok(())
 }
 
+
+
+pub async fn follow_file(path: &str, action_tx: tokio::sync::mpsc::UnboundedSender<Action>) {
+    let mut file = tokio::fs::File::open(path).await.unwrap();
+    let mut interval = tokio::time::interval(std::time::Duration::from_millis(1000));
+    let mut contents = vec![];
+    let mut position = 0; // let mut pos = std::fs::metadata(path)?.len();
+    
+    //let filelength: usize = tokio::fs::metadata(path).await.unwrap().len().try_into().unwrap();
+
+    let mut iternum = 0;
+  
+    loop {
+  
+        iternum += 1;
+        contents.truncate(0);
+        let _ = file.seek(tokio::io::SeekFrom::Start(position as u64)).await;
+        position += file.read_to_end(&mut contents).await.unwrap() - 1; // this panics on deletion in file
+        
+/*         if position < usize::default() {
+            position = 0;
+        } */
+
+        let thestring = String::from_utf8(contents.clone()).unwrap();
+        // do_process(contents)
+        //println!("{:?}", String::from_utf8(contents.clone()).unwrap());
+        if iternum > 1 {
+            if thestring.len() > 1 {
+                action_tx.send(Action::IONotify(thestring)).unwrap_or_else(|error| {
+                    println!("Notifythread sends Error -> {}", error);
+                  });
+            }
+        }
+        interval.tick().await;
+    }
+  }

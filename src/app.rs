@@ -58,13 +58,21 @@ impl App {
     let action_tx3 = action_tx.clone();
 
 
-    let mut filewatcher = tokio::spawn(async move {
-      let path = String::from("/home/projects/ratui/text.txt"); // easy test "/home/projects/ratui/text.txt" // /var/log/fail2ban.log
-      println!("now running on a worker thread");
-      let _resp = tasks::notify_change(&path, action_tx2.clone()).await.unwrap_or_else(|err| {
-        action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
+    let _filewatcher = tokio::spawn(async move  {
+      
+        let path = String::from("/home/projects/ratui/text.txt"); // easy test "/home/projects/ratui/text.txt" // /var/log/fail2ban.log
+        //println!("now running on a worker thread");
+
+        // bog standard polling file reader after
+        // https://stackoverflow.com/questions/71632833/how-to-continuously-watch-and-read-file-asynchronously-in-rust-using-tokio
+        //let _resp = tasks::follow_file(&path, action_tx2.clone()).await;
+
+        // Notify interface CPU problems
+        let _resp = tasks::notify_change(&path, action_tx2.clone()).await.unwrap_or_else(|err| {
+          action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
+        });
       });
-    });
+
 /*     let path = String::from("/home/projects/ratui/text.txt");
     let _resp = tasks::notify_change(&path, action_tx2.clone()).await.unwrap_or_else(|err| {
       action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
