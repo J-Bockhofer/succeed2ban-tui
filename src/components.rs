@@ -121,4 +121,7 @@ pub trait Component {
   ///
   /// * `Result<()>` - An Ok result or an error.
   fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()>;
+
+  // style stuff to avoid home lifetimes? cant be done becuse trait does implement properties....
+
 }

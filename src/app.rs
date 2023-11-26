@@ -2,7 +2,7 @@ use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tokio::process::Command;
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
   tui,
   tasks,
   geofetcher,
-  gen_structs,
+  gen_structs::{self, Geodata},
 };
 
 use regex::Regex;
@@ -29,6 +29,8 @@ pub struct App {
   pub mode: Mode,
   pub last_tick_key_events: Vec<KeyEvent>,
   pub last_ip: String,
+  pub stored_geo: Vec<gen_structs::Geodata>,
+  f2bw_handle: Option<JoinHandle<()>>,
 }
 
 impl App {
@@ -40,13 +42,15 @@ impl App {
     Ok(Self {
       tick_rate,
       frame_rate,
-      components: vec![Box::new(home), Box::new(fps)],
+      components: vec![Box::new(home), Box::new(fps)], //Box::new(home), Box::new(fps)
       should_quit: false,
       should_suspend: false,
       config,
       mode,
       last_tick_key_events: Vec::new(),
       last_ip: String::new(),
+      stored_geo: Vec::new(),
+      f2bw_handle: Option::None,
     })
   }
 
@@ -54,13 +58,13 @@ impl App {
     let (action_tx, mut action_rx) = mpsc::unbounded_channel();
 
     // try make filereader here?
-    let action_tx2 = action_tx.clone();
+/*     let action_tx2 = action_tx.clone();
     let action_tx3 = action_tx.clone();
 
 
     let _filewatcher = tokio::spawn(async move  {
       
-        let path = String::from("/home/projects/ratui/text.txt"); // easy test "/home/projects/ratui/text.txt" // /var/log/fail2ban.log
+        let path = String::from("/var/log/fail2ban.log"); // easy test "/home/projects/ratui/text.txt" // /var/log/fail2ban.log
         //println!("now running on a worker thread");
 
         // bog standard polling file reader after
@@ -71,7 +75,7 @@ impl App {
         let _resp = tasks::notify_change(&path, action_tx2.clone()).await.unwrap_or_else(|err| {
           action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
         });
-      });
+      }); */
 
 /*     let path = String::from("/home/projects/ratui/text.txt");
     let _resp = tasks::notify_change(&path, action_tx2.clone()).await.unwrap_or_else(|err| {
@@ -175,8 +179,20 @@ impl App {
 
             if !results.is_empty() {
               cip = results[0];
-              
-              if cip != self.last_ip.as_str() {
+              // string contained an IPv4
+              let mut maybe_data: Geodata= Geodata::default();
+              let mut is_in_list: bool = false;
+
+              for stored_dat in self.stored_geo.clone() {
+                if cip == stored_dat.ip {
+                  is_in_list = true;
+                  maybe_data = stored_dat;
+                  break
+                }
+
+              }
+
+              if !is_in_list {
                 self.last_ip = String::from(cip);
                 let geodat = geofetcher::fetch_geolocation(cip).await.unwrap_or(serde_json::Value::default());
   
@@ -202,9 +218,14 @@ impl App {
                 geodata.city = geocity;
                 geodata.region_name = georegionname;
     
-    
+                self.stored_geo.push(geodata.clone());
+
                 action_tx.send(Action::GotGeo(geodata))?;
+              } else {
+                // data is stored
+                action_tx.send(Action::GotGeo(maybe_data))?;  
               }
+
             }
 
           },
@@ -222,6 +243,53 @@ impl App {
             //println!("the command exited with: {}", status);
             action_tx.send(Action::Banned(status))?;
             todo!();
+          }
+          Action::StartF2BWatcher => {
+            if self.f2bw_handle.is_none() {
+              // start the fail2ban watcher
+              let action_tx2 = action_tx.clone();
+              let action_tx3 = action_tx.clone();
+
+              let filewatcher = tokio::spawn(async move  {
+                
+                  let path = String::from("/var/log/fail2ban.log"); // easy test "/home/projects/ratui/text.txt" // /var/log/fail2ban.log
+                  //println!("now running on a worker thread");
+
+                  // bog standard polling file reader after
+                  // https://stackoverflow.com/questions/71632833/how-to-continuously-watch-and-read-file-asynchronously-in-rust-using-tokio
+                  //let _resp = tasks::follow_file(&path, action_tx2.clone()).await;
+
+                  // Notify interface CPU higher but no polling shit and more stuff handled thanks
+                  let _resp = tasks::notify_change(&path, action_tx2).await.unwrap_or_else(|err| {
+                    action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
+                  });
+                });
+              self.f2bw_handle = Option::Some(filewatcher);
+            }
+
+
+          },
+          Action::StopF2BWatcher => {
+            if let Some(handle) = self.f2bw_handle.take()  {
+              // should be more graceful
+              handle.abort();
+
+              let mut counter = 0;
+              while !handle.is_finished() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                counter += 1;
+                if counter > 50 {
+                  handle.abort();
+                }
+                if counter > 100 {
+                  log::error!("Failed to abort task in 100 milliseconds for unknown reason");
+                  break;
+                }
+              }
+
+
+            }
+
           }
           _ => {},
         }

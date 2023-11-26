@@ -29,6 +29,8 @@ pub enum Action {
   Ban,
   BanIP(String),
   Banned(bool),
+  StartF2BWatcher,
+  StopF2BWatcher,
 }
 
 impl<'de> Deserialize<'de> for Action {

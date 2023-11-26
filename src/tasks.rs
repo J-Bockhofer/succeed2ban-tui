@@ -10,7 +10,7 @@ use crate::action::Action;
 use tokio::io::AsyncSeekExt;
 use tokio::io::AsyncReadExt;
 
-
+// pass another receiver for the cancellation token?
 pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>) -> Result<()> {
     // get file
     
