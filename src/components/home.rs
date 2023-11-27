@@ -13,6 +13,7 @@ use crate::{
   action::Action,
   config::{Config, KeyBindings},
   geofetcher, gen_structs::Geodata,
+  themes,
 };
 
 use tui_input::{backend::crossterm::EventHandler, Input};
@@ -99,7 +100,7 @@ pub struct Home<'a> {
   config: Config,
   items: StatefulList<(&'a str, usize)>,
   available_actions: StatefulList<(&'a str, String)>,
-  iostreamed: StatefulList<(String, usize)>, // do i need a tuple here? // CHANGED
+  //iostreamed: StatefulList<(String, usize)>, // do i need a tuple here? // CHANGED
   //iostreamed: Vec<(String, usize)>,
   iplist: StatefulList<(String, Geodata)>,
   pub last_events: Vec<KeyEvent>,
@@ -121,9 +122,16 @@ pub struct Home<'a> {
 
   infotext: String,
   elapsed_notify: usize,
+  debug_me: String,
 
   //styledio: Vec<ListItem<'a>>,
-  styledio: Vec<StyledLine>
+  //styledio: Vec<StyledLine>,
+
+  //stored_styled_lines: Vec<StyledLine>,
+
+  stored_styled_iostreamed: StatefulList<(StyledLine, usize)>,
+
+  apptheme: themes::Theme,
 
 }
 
@@ -155,6 +163,7 @@ impl<'a> Home<'a> {
     self.last_lon = 8.9433;
     self.home_lat = 53.0416;
     self.home_lon = 8.9433;
+    self.apptheme = themes::Theme::default();
 
     self
   }
@@ -197,86 +206,61 @@ impl<'a> Home<'a> {
   }
 
 
-  // lifetimes out the wazooo
-  // pub fn highlight_io<'b>(&'b mut self) where 'b: 'a, {
-  // -> Vec<ListItem>
 
-  // avoid the lifetimes by introducing a new struct?
-  pub fn highlight_io(&mut self) {
+  pub fn style_incoming_message(&mut self, msg: String) {
+    let mut dbg: String;
 
-    let iolines: Vec<StyledLine> = self
-    .iostreamed
-    .items // change stateful list to simple vector CHANGED
-    .iter()
-    .map(|i| {
-        // split regex logic here
-        let collected: Vec<&str> = i.0.split("++++").collect();
-        let mut thisline: StyledLine = StyledLine::default();
+    let collected: Vec<&str> = msg.split("++++").collect(); // new line delimiter in received lines, if more than one got added simultaneously
+    self.debug_me = collected.clone().len().to_string();
+    //self.debug_me = collected.clone().len().to_string();
 
-        let lines: Line = Line::default();
-        
-        for line in collected {
-          let mut splitword: &str = "(/%&$§"; // sth super obscure as the default
-          let ip_re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
-          let results: Vec<&str> = ip_re
-            .captures_iter(&line)
-            .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
-            .collect();
-          let mut cip: &str="";
-          if !results.is_empty() {
-            // assume only left and right side - not multiple ips in one line
-            // assume splitword is on left of ip --- lay out of fail2ban sshd
-            cip = results[0];
-            let ban_re: Regex = Regex::new(r"Ban").unwrap();
-            let found_re = Regex::new(r"Found").unwrap();
-            if ban_re.is_match(&line) {splitword = "Ban";}
-            else if found_re.is_match(&line)  {splitword = "Found";}
-            let fparts: Vec<&str> = line.split(cip).collect();
-            let sparts: Vec<&str> = fparts[0].split(splitword).collect();
-
-            //let startspan = Span::styled(sparts[0], Style::default().fg(Color::White));
-
-            thisline.words.push((String::from(sparts[0]), Style::default().fg(Color::White)));
-
-            //lines.spans.push(startspan);
-
-            if sparts.len() > 1 {
-              // Found or Ban
-              //let splitspan = Span::styled(format!("{} ",splitword), Style::default().fg(Color::LightCyan));
-              //lines.spans.push(splitspan);
-              if splitword == "Found" {
-                thisline.words.push((format!("{} ",splitword), Style::default().fg(Color::LightCyan)));
-              }
-              else {
-                // Ban
-                thisline.words.push((format!("{} ",splitword), Style::default().fg(Color::LightYellow)));
-              }
-            }
-            if fparts.len() > 1 {
-              //let ipspan = Span::styled(cip, Style::default().fg(Color::LightRed));
-              //lines.spans.push(ipspan);
-              thisline.words.push((String::from(cip), Style::default().fg(Color::LightRed)));
-              //let endspan = Span::styled(fparts[1], Style::default().fg(Color::White));
-              //lines.spans.push(endspan);
-              thisline.words.push((String::from(fparts[1]), Style::default().fg(Color::White)));
-            }
-          }
-          else {
-            // result empty, meaning no ip found
-            thisline.words.push((String::from(line), Style::default().fg(Color::White)));
-
-          }
+    for tmp_line in collected {
+      if tmp_line.is_empty() {
+        continue;
+      }
+      let mut thisline: StyledLine = StyledLine::default();
+      // do word_map matching first then regex match splitting
+      let words: Vec<&str> = tmp_line.split(" ").collect();
+      let mut held_unstyled_words: Vec<&str> = vec![];
+      for word in words.clone(){
+        let mut word_style = self.apptheme.word_style_map.get_style_or_default(word.to_string()); // Detector for constant word
+        if word_style == Style::default() {
+          // try regex styling on word
+          word_style = self.apptheme.regex_style_map.get_style_or_default(word.to_string()); // Detector for regex
         }
-        //let lines = vec![Line::from(i.0.as_str())];
-        //ListItem::new(lines).style(Style::default().fg(Color::White))
-        thisline
-    })
-    .collect();
+        
 
-    self.styledio = iolines;
+        if word_style == Style::default() {
+          // If no detector has returned any styling
+          held_unstyled_words.push(word);
+        }
+        else {
+          // word is styled
+          // if there are any held words push them with default style and reset held words
+          if held_unstyled_words.len() > 0 {
 
+            thisline.words.push((held_unstyled_words.join(" "), self.apptheme.default_text_style));
+            held_unstyled_words = vec![];
+          }
+          // push styled word with space in front - TODO word is in first position
+          thisline.words.push((format!(" {}", word.to_string()), word_style));
+
+        }
+        // terminate
+        if &word == words.last().unwrap() {
+          thisline.words.push((format!(" {}",held_unstyled_words.join(" ")), self.apptheme.default_text_style));
+        }
+
+      }
+
+      //self.stored_styled_lines.push(thisline);
+      self.stored_styled_iostreamed.items.push((thisline, 1));
+      self.stored_styled_iostreamed.trim_to_length(20);
+
+    }// end per line
 
   }
+
 
 
 }
@@ -439,12 +423,13 @@ impl Component for Home<'_> {
       Action::ExitProcessing => {self.mode = Mode::Normal;},
       Action::IONotify(x) => {
         // CHANGED self.iostreamed.items.push((x.clone(),1));
-        self.iostreamed.items.push((x.clone(),1)); // this introduces the extra CPU load
-        self.iostreamed.trim_to_length(20);
+        //self.iostreamed.items.push((x.clone(),1)); // this introduces the extra CPU load
+        //self.iostreamed.trim_to_length(20);
         self.elapsed_notify += 1;
         
         // call function to split string
-        self.highlight_io();
+        //self.highlight_io();
+        self.style_incoming_message(x.clone());
         
       },
       Action::GotGeo(x) => {
@@ -565,8 +550,8 @@ impl Component for Home<'_> {
         .borders(Borders::ALL)
         .border_style( 
           match self.mode {
-            Mode::TakeAction => {Style::new().blue()},
-            _ => Style::default(),
+            Mode::TakeAction => {self.apptheme.active_border_style},
+            _ => self.apptheme.border_style,
           })
         .title("Actions"))
         .highlight_style(
@@ -599,8 +584,8 @@ impl Component for Home<'_> {
         .borders(Borders::ALL)
         .border_style( 
           match self.mode {
-            Mode::Normal => {Style::new().blue()},
-            _ => Style::default(),
+            Mode::Normal => {self.apptheme.active_border_style},
+            _ => self.apptheme.border_style,
           })
         .title("Last IPs"))
         .highlight_style(
@@ -612,14 +597,15 @@ impl Component for Home<'_> {
         .highlight_symbol(">> ");
 
 
-      
+      //self.styledio == old
       let iolines: Vec<ListItem> = self
-        .styledio 
+        .stored_styled_iostreamed
+        .items 
         .iter()
         .map(|i| {
 
           let mut line: Line = Line::default();
-          for word in i.words.clone() {
+          for word in i.0.words.clone() {
             let cspan = Span::styled(word.0, word.1); 
             line.spans.push(cspan);
           }
@@ -669,7 +655,7 @@ impl Component for Home<'_> {
           .highlight_symbol(">> ");
 
       
-      let infoblock = Paragraph::new(format!("{}--{}",self.infotext.clone(), self.elapsed_notify.to_string()))
+      let infoblock = Paragraph::new(format!("{}-numIn-{}-numLinesLast-{}",self.infotext.clone(), self.elapsed_notify.to_string(), self.debug_me))
         .set_style(Style::new().green())
         .block(Block::default()
         .borders(Borders::ALL)
@@ -679,7 +665,7 @@ impl Component for Home<'_> {
     f.render_widget(self.map_canvas(), right_layout[0]);
 
     // Draw Read file to right_lower = 1
-    f.render_stateful_widget(iolist, right_layout[1], &mut self.iostreamed.state); // CHANGED 
+    f.render_stateful_widget(iolist, right_layout[1], &mut self.stored_styled_iostreamed.state); // CHANGED 
     // f.render_widget(iolist, right_layout[1]);
     
     f.render_widget(infoblock, left_layout[0]);
@@ -696,57 +682,3 @@ impl Component for Home<'_> {
 
 }
 
-pub fn create_styledio<'a>(home: &'a mut Home<'a>) {
-
-  let iolines: Vec<ListItem> = home
-  .iostreamed
-  .items // change stateful list to simple vector CHANGED
-  .iter()
-  .map(|i| {
-      // split regex logic here
-      let collected: Vec<&str> = i.0.split("++++").collect();
-      let mut lines: Line = Line::default();
-      
-      for line in collected {
-        let mut splitword: &str = "(/%&$§";
-        let ip_re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
-        let results: Vec<&str> = ip_re
-          .captures_iter(&line)
-          .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
-          .collect();
-        let mut cip: &str="";
-        if !results.is_empty() {
-          // assume only left and right side - not multiple ips in one line
-          // assume splitword is on left of ip --- lay out of fail2ban sshd
-          cip = results[0];
-          let ban_re: Regex = Regex::new(r"Ban").unwrap();
-          let found_re = Regex::new(r"Found").unwrap();
-          if ban_re.is_match(&line) {splitword = "Ban";}
-          else if found_re.is_match(&line)  {splitword = "Found";}
-          let fparts: Vec<&str> = line.split(cip).collect();
-          let sparts: Vec<&str> = fparts[0].split(splitword).collect();
-
-          let startspan = Span::styled(sparts[0], Style::default().fg(Color::White));
-          lines.spans.push(startspan);
-
-          if sparts.len() > 1 {
-            // Found or Ban
-            let splitspan = Span::styled(format!("{} ",splitword), Style::default().fg(Color::LightCyan));
-            lines.spans.push(splitspan);
-          }
-          if fparts.len() > 1 {
-            let ipspan = Span::styled(cip, Style::default().fg(Color::LightRed));
-            lines.spans.push(ipspan);
-            let endspan = Span::styled(fparts[1], Style::default().fg(Color::White));
-            lines.spans.push(endspan);
-          }
-        }
-      }
-      //let lines = vec![Line::from(i.0.as_str())];
-      ListItem::new(lines).style(Style::default().fg(Color::White))
-  })
-  .collect();
-
-  //home.styledio = iolines;
-
-}
