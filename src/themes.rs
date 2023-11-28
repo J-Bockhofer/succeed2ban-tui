@@ -181,7 +181,7 @@ impl Default for Theme {
         //Theme::new()
         Theme { word_style_map: WordStyleMap{ word_styles: vec![
                     WordStylePair::new(String::from("Found"), Style::default().fg(colors::ACCENT_DBLUE)),
-                    WordStylePair::new(String::from("Ban"), Style::default().fg(colors::ACCENT_LORANGE)),
+                    WordStylePair::new(String::from("Ban"), Style::default().fg(colors::ACCENT_ORANGE)),
                     WordStylePair::new(String::from("INFO"), Style::default().fg(colors::ACCENT_DBLUE)),
                     WordStylePair::new(String::from("WARNING"), Style::default().fg(colors::ACCENT_LPINK)),
                     WordStylePair::new(String::from("NOTICE"), Style::default().fg(colors::ACCENT_LIME)),
@@ -191,10 +191,11 @@ impl Default for Theme {
                 ]
             }, 
             regex_style_map: RegexStyleMap{ regex_styles: vec![
-                RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)),
+                RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // IP v4
+                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp
             ]},
             default_text_style: Style::default().fg(Color::White),
-            username_style: Style::default().bg(colors::ACCENT_DBLUE).fg(Color::White),
+            username_style: Style::default().fg(colors::ACCENT_ORANGE),
             default_background: Style::default().bg(colors::BACKGROUND),
             border_style: Style::default(),
             active_border_style: Style::new().fg(colors::ACCENT_ORANGE),

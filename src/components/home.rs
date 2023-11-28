@@ -170,7 +170,7 @@ impl<'a> Home<'a> {
               x: self.last_lon, // lon
               y: self.last_lat, // lat
               radius: self.elapsed_frames,
-              color: self.apptheme.colors.accent_wred,
+              color: self.apptheme.colors.accent_orange,
             });
             //ctx.print(self.last_lon, self.last_lat, "X".red());
             ctx.print(self.home_lon, self.home_lat, Line::from(Span::styled("H", Style::default().fg(self.apptheme.colors.accent_orange))));
