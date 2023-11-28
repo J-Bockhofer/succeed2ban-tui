@@ -1,5 +1,6 @@
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
+use futures::channel::mpsc::UnboundedSender;
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -31,6 +32,7 @@ pub struct App {
   pub last_ip: String,
   pub stored_geo: Vec<gen_structs::Geodata>,
   f2bw_handle: Option<JoinHandle<()>>,
+  jctl_handle: Option<JoinHandle<()>>,
 }
 
 impl App {
@@ -51,11 +53,14 @@ impl App {
       last_ip: String::new(),
       stored_geo: Vec::new(),
       f2bw_handle: Option::None,
+      jctl_handle: Option::None,
     })
   }
 
   pub async fn run(&mut self) -> Result<()> {
     let (action_tx, mut action_rx) = mpsc::unbounded_channel();
+
+    let mut jctl_sender: Option<mpsc::UnboundedSender<bool>>= Option::None;
 
     // try make filereader here?
 /*     let action_tx2 = action_tx.clone();
@@ -243,7 +248,7 @@ impl App {
             //println!("the command exited with: {}", status);
             action_tx.send(Action::Banned(status))?;
             todo!();
-          }
+          },
           Action::StartF2BWatcher => {
             if self.f2bw_handle.is_none() {
               // start the fail2ban watcher
@@ -290,7 +295,61 @@ impl App {
 
             }
 
-          }
+          },
+          Action::StartJCtlWatcher => {
+            if jctl_sender.is_none() {
+
+              // create sender and receiver for cancellation:
+              let (cancel_tx, cancel_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
+              jctl_sender = Option::Some(cancel_tx);
+
+              // start the fail2ban watcher
+              let action_tx2 = action_tx.clone();
+              let action_tx3 = action_tx.clone();
+
+              let journalwatcher = tokio::spawn(async move  {
+                
+
+                  // Notify interface CPU higher but no polling shit and more stuff handled thanks
+                  let _resp = tasks::monitor_journalctl( action_tx2, cancel_rx).await.unwrap_or_else(|err| {
+                    action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
+                  });
+                });
+              self.jctl_handle = Option::Some(journalwatcher);
+            }
+
+
+          },
+          Action::StopJCtlWatcher => {
+            if let Some(jctl_sender) = jctl_sender.take()  {
+              // should be more graceful
+              let handle = self.jctl_handle.take().unwrap();
+
+              jctl_sender.send(false).unwrap_or_else(|err| {
+                println!("Failed to send JCTL abort with Error: {}", err);
+              });
+              handle.abort();
+              
+              let mut counter = 0;
+              while !handle.is_finished() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                counter += 1;
+                if counter > 50 {
+                  jctl_sender.send(false).unwrap_or_else(|err| {
+                    println!("Failed to send JCTL abort with Error: {}", err);
+                  });
+                  handle.abort();
+                }
+                if counter > 100 {
+                  log::error!("Failed to abort task in 100 milliseconds for unknown reason");
+                  break;
+                }
+              }
+
+
+            }
+
+          },
           _ => {},
         }
 

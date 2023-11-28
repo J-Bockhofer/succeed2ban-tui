@@ -1,9 +1,12 @@
 
-use ratatui::{style::Style, prelude::Color};
+use color_eyre::owo_colors::OwoColorize;
+use ratatui::{style::Style, prelude::Color, prelude::Modifier};
 use regex::Regex;
 
 use std::iter::Map;
 //use std::collections::HashMap;
+
+pub mod colors;
 
 #[derive(Default)]
 pub struct WordStylePair {
@@ -107,26 +110,69 @@ impl RegexStyleMap {
 
 }
 
+#[derive(Default)]
+pub struct ThemeColors {
+    pub default_background: Color,
+    pub default_map_color: Color,
 
+    pub accent_blue: Color,
+    pub accent_orange: Color,
+    pub accent_lorange: Color,
+    pub accent_dblue: Color,
+    pub accent_wred: Color,
+    pub accent_lpink: Color,
+    pub accent_lime: Color,
+
+}
+
+
+
+impl ThemeColors {
+    pub fn new() -> Self {
+        ThemeColors::default()
+    }
+}
 
 pub struct Theme {
     // Text Styling
     pub word_style_map: WordStyleMap,
     pub regex_style_map: RegexStyleMap,
     pub default_text_style: Style,
+    pub username_style: Style,
+    pub journal_bg: Style,
+    pub fail2ban_bg: Style,
     // UI Styling
+    pub default_background: Style,
     pub border_style: Style,
     pub active_border_style: Style,
+    pub highlight_item_style: Style,
+    // Const Colors
+    pub colors: ThemeColors,
+
+
 } 
 
 impl Theme {
     pub fn new(word_style_map: WordStyleMap, 
         regex_style_map: RegexStyleMap, 
         default_text_style: Style, 
+        username_style:Style,
+        default_background: Style,
         border_style: Style,
-        active_border_style: Style,) -> Self 
+        active_border_style: Style,
+        journal_bg: Style,
+        fail2ban_bg: Style,
+        highlight_item_style: Style, 
+        colors: ThemeColors,
+        ) -> Self 
+
         {
-        Theme { word_style_map, regex_style_map, default_text_style, border_style, active_border_style}
+        Theme { word_style_map, regex_style_map, default_text_style, username_style, default_background, border_style, active_border_style, 
+            journal_bg,
+            fail2ban_bg,
+            highlight_item_style,
+            colors,
+        }
     }
 }
 
@@ -134,20 +180,41 @@ impl Default for Theme {
     fn default() -> Self {
         //Theme::new()
         Theme { word_style_map: WordStyleMap{ word_styles: vec![
-                    WordStylePair::new(String::from("Found"), Style::default().fg(Color::LightCyan)),
-                    WordStylePair::new(String::from("Ban"), Style::default().fg(Color::LightYellow)),
-                    WordStylePair::new(String::from("INFO"), Style::default().fg(Color::LightCyan)),
-                    WordStylePair::new(String::from("WARNING"), Style::default().fg(Color::Yellow)),
-                    WordStylePair::new(String::from("NOTICE"), Style::default().fg(Color::LightGreen)),
+                    WordStylePair::new(String::from("Found"), Style::default().fg(colors::ACCENT_DBLUE)),
+                    WordStylePair::new(String::from("Ban"), Style::default().fg(colors::ACCENT_LORANGE)),
+                    WordStylePair::new(String::from("INFO"), Style::default().fg(colors::ACCENT_DBLUE)),
+                    WordStylePair::new(String::from("WARNING"), Style::default().fg(colors::ACCENT_LPINK)),
+                    WordStylePair::new(String::from("NOTICE"), Style::default().fg(colors::ACCENT_LIME)),
+                    WordStylePair::new(String::from("user"), Style::default().fg(colors::ACCENT_BLUE)),
+                    WordStylePair::new(String::from("fatal:"), Style::default().fg(colors::ACCENT_ORANGE)),
                     //WordStylePair::new(String::from("[sshd]"), Style::default().fg(Color::Rgb(138, 43, 226))),
                 ]
             }, 
             regex_style_map: RegexStyleMap{ regex_styles: vec![
-                RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(Color::LightRed)),
+                RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)),
             ]},
             default_text_style: Style::default().fg(Color::White),
+            username_style: Style::default().bg(colors::ACCENT_DBLUE).fg(Color::White),
+            default_background: Style::default().bg(colors::BACKGROUND),
             border_style: Style::default(),
-            active_border_style: Style::new().fg(Color::LightBlue),
+            active_border_style: Style::new().fg(colors::ACCENT_ORANGE),
+            journal_bg: Style::default().bg(Color::Rgb(32, 32, 32)),
+            fail2ban_bg: Style::default().bg(Color::Rgb(48, 48, 48)),
+            highlight_item_style: Style::default()
+                                    .fg(Color::Black)
+                                    .bg(colors::ACCENT_BLUE)
+                                    .add_modifier(Modifier::BOLD),
+            colors: ThemeColors { 
+                default_background: colors::BACKGROUND, 
+                default_map_color: Color::Rgb(139,139,141), 
+                accent_blue: colors::ACCENT_BLUE, 
+                accent_orange: colors::ACCENT_ORANGE,
+                accent_lorange: colors::ACCENT_LORANGE,
+                accent_dblue: colors::ACCENT_DBLUE,
+                accent_wred: colors::ACCENT_WRED,
+                accent_lpink: colors::ACCENT_LPINK,
+                accent_lime: colors::ACCENT_LIME,
+            }
          }      
     }
 }

@@ -1,61 +1,68 @@
+use std::process::{Command, Stdio};
+use std::io::Read;
 
-use regex::Regex;
-//let re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).unwrap();
+
+
+
+
+
 #[tokio::main]
 async fn main() {
 
-    // 2023-11-23 05:15:20,065 fail2ban.ipdns          [836]: WARNING Unable to find a corresponding IP address for whitelist-IP: [Errno -2] Name or service not known
-    // 2023-11-23 05:30:26,385 fail2ban.filter         [836]: INFO    [sshd] Found 1.12.60.11 - 2023-11-23 05:30:26
 
-    let teststr = "2023-11-23 05:30:26,385 fail2ban.filter         [836]: INFO    [sshd] Found 1.12.60.11 - 2023-11-23 05:30:26";
+  let (action_tx, mut action_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
-    let mut splitword: &str ="(/%&$§";
+  let _joinhandle = tokio::spawn(async move {
 
-    let ip_re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
-    let results: Vec<&str> = ip_re
-      .captures_iter(teststr)
-      .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
-      .collect();
-    let mut cip: &str = "";
-    if !results.is_empty() {
-      cip = results[0];
+    // closure needs a sender to send to new string and a receiver to terminate the process
+
+    let argus = vec!["-n", "1", "-f", "-u", "ssh"];
+    let mut command = Command::new("journalctl");
+    command
+        .args(argus)
+        .stdout(Stdio::piped());
+
+    if let Ok(child) = command.spawn() {
+        if let Some(mut out) = child.stdout {
+          let mut pre_line: Vec<u8> = vec![];
+            loop {            
+              let mut chars: [u8; 1] = [0; 1];
+              out.read(&mut chars).expect("didn't work");
+              
+              // check if we encounter a newline character, if yes send chars 
+              if chars[0] == b'\n' || chars[0] == b'\r' {
+                // terminate string
+                //println!("Newline detected");
+                //println!("{}", str::from_utf8(&pre_line).unwrap());
+                let line = String::from_utf8(pre_line).unwrap();
+                action_tx.send(line).unwrap_or_else(|err| {
+                  println!("Send Error: {}", err);
+                });
+                pre_line = vec![];
+              }
+              else {
+                // add char to line
+                //print!("Pushing {}", str::from_utf8(&chars).unwrap());
+                pre_line.push(chars[0]);
+                //println!("{}", str::from_utf8(&pre_line).unwrap());
+              }      
+            }
+            
+        }
+    } else {
+      println!("Process failed to start");
     }
-    let ban_re = Regex::new(r"Ban").unwrap();
-    let found_re = Regex::new(r"Found").unwrap();
-    if ban_re.is_match(teststr) {splitword = "Ban";}
-    else if found_re.is_match(teststr)  {splitword = "Found";}
-    let mut fparts: Vec<&str> = vec![""];
-    let mut sparts: Vec<&str> = vec![""];
-    if !cip.is_empty() {
-      fparts = teststr.split(cip).collect();
-      sparts = fparts[0].split(splitword).collect();
-      
-      println!("{}",sparts.len());
 
-    } // assume only left and right side - not multiple ips in one line
+  });
 
-    println!("{}",cip);
-    println!("{:?}", fparts);
-    println!("{:?}", sparts);
-    //let myip = "202.157.189.170";
-
-    //let geodat = fetch_geolocation(myip).await.unwrap_or(serde_json::Value::default());
-
-    //let geolat = geodat.get("lat").unwrap();
-    //let geolon = geodat.get("lon").unwrap();
-
-
-    //println!("{:?}", geolat.as_number().unwrap().to_string().parse::<f64>().unwrap());  
-}
-
-pub async fn fetch_geolocation(ip: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-
-    let url = format!("http://ip-api.com/json/{ip}");
-    let resp = reqwest::get(url)
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
-    println!("{:#?}", resp);
-    Ok(resp) 
+  let mut tick_interval = tokio::time::interval(std::time::Duration::from_millis(100));
+  loop {
+     let msg = action_rx.try_recv().unwrap_or_default();
+     if !msg.is_empty() {
+      println!("Received {}", msg);
+     }
+     tick_interval.tick().await;
+  }
 
 }
+

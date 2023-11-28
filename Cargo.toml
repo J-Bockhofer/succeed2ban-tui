@@ -40,3 +40,5 @@ regex = "1.10.2"
 
 sqlx = { version = "=0.7.3", features = ["sqlite"] }
 rusqlite = "=0.30.0"
+libsystemd = "0.7.0"
+textwrap = "0.16.0"

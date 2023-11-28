@@ -2,13 +2,18 @@ use std::io::{Seek, BufReader, BufRead};
 use notify::{Watcher, RecursiveMode, Result, RecommendedWatcher, Config};
 
 use tokio::{
-    sync::mpsc::UnboundedSender
+    sync::mpsc::UnboundedSender,
+    sync::mpsc::UnboundedReceiver
   };
 
 use crate::action::Action;
 
 use tokio::io::AsyncSeekExt;
 use tokio::io::AsyncReadExt;
+
+
+use std::process::{Command, Stdio, ChildStdout};
+use std::io::Read;
 
 // pass another receiver for the cancellation token?
 pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>) -> Result<()> {
@@ -73,37 +78,86 @@ pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>) -> Res
 
 
 
-pub async fn follow_file(path: &str, action_tx: tokio::sync::mpsc::UnboundedSender<Action>) {
-    let mut file = tokio::fs::File::open(path).await.unwrap();
-    let mut interval = tokio::time::interval(std::time::Duration::from_millis(1000));
-    let mut contents = vec![];
-    let mut position = 0; // let mut pos = std::fs::metadata(path)?.len();
-    
-    //let filelength: usize = tokio::fs::metadata(path).await.unwrap().len().try_into().unwrap();
+pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, mut cancel_rx:UnboundedReceiver<bool>) -> Result<()> {
 
-    let mut iternum = 0;
-  
-    loop {
-  
-        iternum += 1;
-        contents.truncate(0);
-        let _ = file.seek(tokio::io::SeekFrom::Start(position as u64)).await;
-        position += file.read_to_end(&mut contents).await.unwrap() - 1; // this panics on deletion in file
-        
-/*         if position < usize::default() {
-            position = 0;
-        } */
+    let (action_tx, mut action_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
-        let thestring = String::from_utf8(contents.clone()).unwrap();
-        // do_process(contents)
-        //println!("{:?}", String::from_utf8(contents.clone()).unwrap());
-        if iternum > 1 {
-            if thestring.len() > 1 {
-                action_tx.send(Action::IONotify(thestring)).unwrap_or_else(|error| {
-                    println!("Notifythread sends Error -> {}", error);
+    let (_cancel_tx, mut _cancel_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
+
+    let argus = vec!["-n", "1", "-f", "-u", "ssh"];
+    let mut command = Command::new("journalctl");
+
+    let _joinhandle = tokio::spawn(async move {
+  
+      // closure needs a sender to send to new string and a receiver to terminate the process
+      let mut tick_interval = tokio::time::interval(std::time::Duration::from_nanos(10));
+      command
+          .args(argus)
+          .stdout(Stdio::piped());
+  
+      if let Ok(mut child) = command.spawn() {
+          if let Some(mut out) = child.stdout.take() {
+            let mut pre_line: Vec<u8> = vec![];
+              loop {            
+                let mut chars: [u8; 1] = [0; 1];
+                out.read(&mut chars).expect("didn't work");
+                
+                // check if we encounter a newline character, if yes send chars 
+                if chars[0] == b'\n' || chars[0] == b'\r' {
+                  // terminate string
+                  //println!("Newline detected");
+                  //println!("{}", str::from_utf8(&pre_line).unwrap());
+                  let line = String::from_utf8(pre_line).unwrap();
+                  action_tx.send(line).unwrap_or_else(|err| {
+                    println!("Send Error: {}", err);
                   });
-            }
-        }
-        interval.tick().await;
+                  pre_line = vec![];
+                }
+                else {
+                  // add char to line
+                  //print!("Pushing {}", str::from_utf8(&chars).unwrap());
+                  pre_line.push(chars[0]);
+                  //println!("{}", str::from_utf8(&pre_line).unwrap());
+                } 
+                let cancel = _cancel_rx.try_recv().unwrap_or_default();
+                if cancel {
+                    let _ = child.kill().unwrap();
+                    break;
+                }  
+                tick_interval.tick().await;   
+              }  
+          } else {
+
+          }
+      } else {
+        println!("Process failed to start");
+      }
+
+  
+    });
+  
+    let mut tick_interval = tokio::time::interval(std::time::Duration::from_millis(100));
+    loop {
+       let msg = action_rx.try_recv().unwrap_or_default();
+       if !msg.is_empty() {
+        event_tx.send(Action::IONotify(msg)).unwrap();
+        //println!("Received {}", msg);
+       }
+       
+
+       let cancel = cancel_rx.try_recv().unwrap_or_default();
+       if cancel {
+        _cancel_tx.send(true).unwrap();
+        tick_interval.tick().await;
+        _cancel_tx.send(true).unwrap();
+
+        event_tx.send(Action::StoppedJCtlWatcher).unwrap();
+        _joinhandle.abort();
+
+       }       
+
+
+       tick_interval.tick().await;
     }
-  }
+
+}

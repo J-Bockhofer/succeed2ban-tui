@@ -12,7 +12,7 @@ use super::{Component, Frame};
 use crate::{
   action::Action,
   config::{Config, KeyBindings},
-  geofetcher, gen_structs::Geodata,
+  geofetcher, gen_structs::Geodata, gen_structs::StatefulList,
   themes,
 };
 
@@ -31,60 +31,6 @@ fn map_range(from_range: (f64, f64), to_range: (f64, f64), s: f64) -> f64 {
 }
 
 
-#[derive(Default)]
-struct StatefulList<T> {
-  state: ListState,
-  items: Vec<T>,
-}
-
-impl<T> StatefulList<T> {
-  fn with_items(items: Vec<T>) -> StatefulList<T> {
-      StatefulList {
-          state: ListState::default(),
-          items,
-      }
-  }
-
-  fn next(&mut self) {
-      let i = match self.state.selected() {
-          Some(i) => {
-              if i >= self.items.len() - 1 {
-                  0
-              } else {
-                  i + 1
-              }
-          }
-          None => 0,
-      };
-      //println!("next Item: {i}");
-      self.state.select(Some(i));
-  }
-
-  fn previous(&mut self) {
-      let i = match self.state.selected() {
-          Some(i) => {
-              if i == 0 {
-                  self.items.len() - 1
-              } else {
-                  i - 1
-              }
-          }
-          None => 0,
-      };
-      self.state.select(Some(i));
-  }
-
-  fn unselect(&mut self) {
-      self.state.select(None);
-  }
-
-  fn trim_to_length(&mut self, max_length: usize) {
-    while self.items.len() > max_length {
-        self.items.remove(0);
-    }
-  }
-}
-
 
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub enum Mode {
@@ -102,7 +48,7 @@ pub struct Home<'a> {
   available_actions: StatefulList<(&'a str, String)>,
   //iostreamed: StatefulList<(String, usize)>, // do i need a tuple here? // CHANGED
   //iostreamed: Vec<(String, usize)>,
-  iplist: StatefulList<(String, Geodata)>,
+  iplist: StatefulList<(String, Geodata, String)>,
   pub last_events: Vec<KeyEvent>,
   pub keymap: HashMap<KeyEvent, Action>,
   pub input: Input,
@@ -129,9 +75,14 @@ pub struct Home<'a> {
 
   //stored_styled_lines: Vec<StyledLine>,
 
-  stored_styled_iostreamed: StatefulList<(StyledLine, usize)>,
+  stored_styled_iostreamed: StatefulList<(StyledLine, String)>,
 
   apptheme: themes::Theme,
+
+  jctlrunning: bool,
+  f2brunning: bool,
+
+  last_username: String,
 
 }
 
@@ -156,7 +107,7 @@ impl<'a> Home<'a> {
     self.available_actions = StatefulList::with_items(vec![
       ("Ban", String::from("some ip")),
       ("Unban", String::from("some ip")),
-      ("monitor-systemd", String::from("inactive")),
+      ("monitor-journalctl", String::from("inactive")),
       ("monitor-fail2ban", String::from("inactive")),
     ]);
     self.last_lat = 53.0416;
@@ -164,6 +115,9 @@ impl<'a> Home<'a> {
     self.home_lat = 53.0416;
     self.home_lon = 8.9433;
     self.apptheme = themes::Theme::default();
+    self.jctlrunning = false;
+    self.f2brunning = false;
+    
 
     self
   }
@@ -173,33 +127,53 @@ impl<'a> Home<'a> {
     self
   }
 
-  fn map_canvas(&self) -> impl Widget + '_ {
+  fn map_canvas(&self, area: &Rect) -> impl Widget + '_ {
+
+    let w = f64::from(area.width.clone());
+    let h = f64::from(area.height.clone());
+
     canvas::Canvas::default()
-        .block(Block::default().borders(Borders::ALL).title("World"))
+        .background_color(self.apptheme.colors.default_background)
+        .block(Block::default().borders(Borders::ALL).title("World").bg(self.apptheme.colors.default_background))
         .marker(Marker::Braille)
-        .paint(|ctx| {
+        .paint(move |ctx| {
+/*             ctx.draw(&canvas::Rectangle {
+              x:  w / 2.,
+              y: h / 2.,
+              width: w,
+              height: h,
+              color:self.apptheme.colors.default_background,
+            }); */
+
             ctx.draw(&canvas::Map {
-                color: Color::Green,
+                color: self.apptheme.colors.default_map_color,
                 resolution: canvas::MapResolution::High,
             });
             // draw line to home
-            //x1: self.home_lon,
-            //y1: self.home_lat,
+            ctx.draw(&canvas::Line {
+              x1: self.home_lon,
+              y1: self.home_lat,
+              x2: self.last_lon,
+              y2: self.last_lat,
+              color:self.apptheme.colors.accent_dblue,
+            }); 
+
             ctx.draw(&canvas::Line {
               x1: self.last_lon + self.last_direction.0 * map_range((0.,7.), (0.,1.), self.elapsed_frames),
               y1: self.last_lat + self.last_direction.1 * map_range((0.,7.), (0.,1.), self.elapsed_frames),
               x2: self.last_lon,
               y2: self.last_lat,
-              color:Color::Cyan,
+              color: self.apptheme.colors.accent_blue,
             });
+           
             ctx.draw(&canvas::Circle {
               x: self.last_lon, // lon
               y: self.last_lat, // lat
               radius: self.elapsed_frames,
-              color: Color::Red,
+              color: self.apptheme.colors.accent_wred,
             });
             //ctx.print(self.last_lon, self.last_lat, "X".red());
-            ctx.print(self.home_lon, self.home_lat, "H".cyan());
+            ctx.print(self.home_lon, self.home_lat, Line::from(Span::styled("H", Style::default().fg(self.apptheme.colors.accent_orange))));
         })
         .x_bounds([-180.0, 180.0])
         .y_bounds([-90.0, 90.0])
@@ -210,6 +184,13 @@ impl<'a> Home<'a> {
   pub fn style_incoming_message(&mut self, msg: String) {
     let mut dbg: String;
 
+    let mut last_io = String::from("Journal");
+    self.last_username = String::from("");
+
+    if msg.contains("++++") {
+      // message is from Fail2Ban
+      last_io = String::from("Fail2Ban");
+    }
     let collected: Vec<&str> = msg.split("++++").collect(); // new line delimiter in received lines, if more than one got added simultaneously
     self.debug_me = collected.clone().len().to_string();
     //self.debug_me = collected.clone().len().to_string();
@@ -222,11 +203,17 @@ impl<'a> Home<'a> {
       // do word_map matching first then regex match splitting
       let words: Vec<&str> = tmp_line.split(" ").collect();
       let mut held_unstyled_words: Vec<&str> = vec![];
+      let mut last_word: &str= "";
+
       for word in words.clone(){
         let mut word_style = self.apptheme.word_style_map.get_style_or_default(word.to_string()); // Detector for constant word
         if word_style == Style::default() {
           // try regex styling on word
           word_style = self.apptheme.regex_style_map.get_style_or_default(word.to_string()); // Detector for regex
+        }
+        if last_word == "user" {
+          word_style = self.apptheme.username_style;
+          self.last_username = word.to_string();
         }
         
 
@@ -246,15 +233,20 @@ impl<'a> Home<'a> {
           thisline.words.push((format!(" {}", word.to_string()), word_style));
 
         }
+        last_word = word;
+
         // terminate
         if &word == words.last().unwrap() {
           thisline.words.push((format!(" {}",held_unstyled_words.join(" ")), self.apptheme.default_text_style));
         }
+        
 
       }
 
+      
+
       //self.stored_styled_lines.push(thisline);
-      self.stored_styled_iostreamed.items.push((thisline, 1));
+      self.stored_styled_iostreamed.items.push((thisline, last_io.clone()));
       self.stored_styled_iostreamed.trim_to_length(20);
 
     }// end per line
@@ -366,17 +358,29 @@ impl Component for Home<'_> {
               "Ban" => {Action::Ban},
               "monitor-fail2ban" => {
                 // check if is active
-                if self.available_actions.items[action_idx].1.as_str() == "active"{
-                  // switch to inactive
+                if self.f2brunning {
                   self.available_actions.items[action_idx].1 = String::from("inactive");
                   Action::StopF2BWatcher
+                } else {
+                  self.available_actions.items[action_idx].1 = String::from("active");
+                  self.f2brunning = true;
+                  Action::StartF2BWatcher                 
+                }
+
+              },
+              "monitor-journalctl" => {
+                // check if is active
+                if self.jctlrunning{
+                  // switch to inactive
+                  self.available_actions.items[action_idx].1 = String::from("inactive");
+                  Action::StopJCtlWatcher
                 }
                 else{
                   // switch to active
                   self.available_actions.items[action_idx].1 = String::from("active");
-                  Action::StartF2BWatcher
+                  self.jctlrunning = true;
+                  Action::StartJCtlWatcher  
                 }
-
               },
               _ => {Action::Render},
             }
@@ -396,6 +400,19 @@ impl Component for Home<'_> {
                   // switch to active
                   self.available_actions.items[action_idx].1 = String::from("active");
                   Action::StartF2BWatcher
+                }
+              },
+              "monitor-journalctl" => {
+                // check if is active
+                if self.available_actions.items[action_idx].1.as_str() == "active"{
+                  // switch to inactive
+                  self.available_actions.items[action_idx].1 = String::from("inactive");
+                  Action::StopJCtlWatcher
+                }
+                else{
+                  // switch to active
+                  self.available_actions.items[action_idx].1 = String::from("active");
+                  Action::StartJCtlWatcher
                 }
 
               },
@@ -421,14 +438,10 @@ impl Component for Home<'_> {
       Action::EnterTakeAction => {self.mode = Mode::TakeAction;},
       Action::EnterProcessing => {self.mode = Mode::Processing;},
       Action::ExitProcessing => {self.mode = Mode::Normal;},
+      Action::StoppedJCtlWatcher => {self.jctlrunning = false;},
       Action::IONotify(x) => {
-        // CHANGED self.iostreamed.items.push((x.clone(),1));
-        //self.iostreamed.items.push((x.clone(),1)); // this introduces the extra CPU load
-        //self.iostreamed.trim_to_length(20);
+
         self.elapsed_notify += 1;
-        
-        // call function to split string
-        //self.highlight_io();
         self.style_incoming_message(x.clone());
         
       },
@@ -453,7 +466,7 @@ impl Component for Home<'_> {
 
         if !cipvec.iter().any(|i| i.0==cip) {
 
-          self.iplist.items.push((cip, x.clone()));
+          self.iplist.items.push((cip, x.clone(), self.last_username.clone()));
           self.iplist.trim_to_length(10);
           if self.iplist.items.len() > 1 {
             self.iplist.state.select(Option::Some(self.iplist.items.len()-1));
@@ -478,7 +491,7 @@ impl Component for Home<'_> {
       },
       Action::Banned(x) => {
         if x {self.infotext = String::from("BANNED");}
-      }
+      },
       _ => {},
     }
     Ok(None)
@@ -532,10 +545,14 @@ impl Component for Home<'_> {
           );          
         }
         else {
+          let mut symb = "X";
+          if i.1 == String::from("active") {
+            symb = "✓";
+          }
           lines.push(
-            format!("X - {}", i.1)
-                .italic()
-                .into(),
+              format!("{} - {}", symb, i.1)
+              .italic()
+              .into(),
           );            
         }
 
@@ -546,6 +563,7 @@ impl Component for Home<'_> {
 
     // Create a List from all list items and highlight the currently selected one
     let actionlist = List::new(av_actions)
+        .bg(self.apptheme.colors.default_background)
         .block(Block::default()
         .borders(Borders::ALL)
         .border_style( 
@@ -554,12 +572,7 @@ impl Component for Home<'_> {
             _ => self.apptheme.border_style,
           })
         .title("Actions"))
-        .highlight_style(
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightGreen)
-                .add_modifier(Modifier::BOLD),
-        )
+        .highlight_style(self.apptheme.highlight_item_style)
         .highlight_symbol(">> ");
 
 
@@ -568,7 +581,7 @@ impl Component for Home<'_> {
     .items
     .iter()
     .map(|i| {
-        let mut lines = vec![Line::from(i.0.as_str())]; // let mut lines = vec![Line::from(i.0)];
+        let mut lines = vec![Line::from(format!("{}   {}", i.0, i.2))]; // let mut lines = vec![Line::from(i.0)];
         lines.push(
           format!("X - {}, {}", i.1.city, i.1.country)
               .italic()
@@ -580,6 +593,7 @@ impl Component for Home<'_> {
 
     // Create a List from all list items and highlight the currently selected one
     let iplist = List::new(ips)
+        .bg(self.apptheme.colors.default_background)
         .block(Block::default()
         .borders(Borders::ALL)
         .border_style( 
@@ -588,14 +602,10 @@ impl Component for Home<'_> {
             _ => self.apptheme.border_style,
           })
         .title("Last IPs"))
-        .highlight_style(
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightGreen)
-                .add_modifier(Modifier::BOLD),
-        )
+        .highlight_style(self.apptheme.highlight_item_style)
         .highlight_symbol(">> ");
 
+      let term_w = right_layout[1].width as usize;
 
       //self.styledio == old
       let iolines: Vec<ListItem> = self
@@ -610,6 +620,22 @@ impl Component for Home<'_> {
             line.spans.push(cspan);
           }
 
+          let bg_style: Style;
+          if i.1 == "Journal" {
+
+            bg_style = self.apptheme.journal_bg;
+          } else {
+            bg_style = self.apptheme.fail2ban_bg;
+          }
+          let line_w = line.width();
+          if line_w < term_w {
+            // fill line with whitespaces
+            let dif = term_w - line_w;
+            let cspan = Span::styled(str::repeat(" ", dif), self.apptheme.default_text_style); 
+            line.spans.push(cspan);
+
+          }
+          line.patch_style(bg_style);
           ListItem::new(line)
         })
         .collect();
@@ -625,20 +651,31 @@ impl Component for Home<'_> {
           ListItem::new(Line::from(i.0.as_str())).style(Style::default().fg(Color::White))
         })
         .collect(); */
-      let mut ioactive: bool = false;
+      let mut ioactive: u8 = 0;
       if self.available_actions.items[2].1 == "active" || self.available_actions.items[3].1 == "active" {
-        ioactive = true;
+        if self.available_actions.items[2].1 == "active" && self.available_actions.items[3].1 == "active" {
+          ioactive = 2;
+        } else{
+          ioactive = 1;
+        }
       }
+
 
       let iolist_title = Line::from(vec![
         Span::styled(" I/O Stream [ ", Style::default().fg(Color::White)),
         Span::styled(animsymbols[self.elapsed_rticks],
-          if ioactive {Style::default().fg(Color::Green)} else {Style::default().fg(Color::Red)}),
+          match ioactive { 0 => {Style::default().fg(self.apptheme.colors.accent_wred)}, 1 => {Style::default().fg(self.apptheme.colors.accent_lpink)}, 2 => {Style::default().fg(self.apptheme.colors.accent_blue)} _ => {Style::default().fg(self.apptheme.colors.accent_wred)}}),
         Span::styled(" ] ", Style::default().fg(Color::White)),
       ]);
+
+      // list
+      // right_layout[1]
+          
+
       // Create a List from all list items and highlight the currently selected one
       let iolist = List::new( iolines) //self.styledio.clone()
           .block(Block::default()
+            .bg(self.apptheme.colors.default_background)
             .borders(Borders::ALL)
             .border_style( 
               match self.mode {
@@ -647,22 +684,19 @@ impl Component for Home<'_> {
               })
             .title(iolist_title)
           )
-          .highlight_style(
-              Style::default()
-                  .bg(Color::LightGreen)
-                  .add_modifier(Modifier::BOLD),
-          )
+          .highlight_style(self.apptheme.highlight_item_style)
           .highlight_symbol(">> ");
 
       
       let infoblock = Paragraph::new(format!("{}-numIn-{}-numLinesLast-{}",self.infotext.clone(), self.elapsed_notify.to_string(), self.debug_me))
-        .set_style(Style::new().green())
+        .set_style(Style::default())
         .block(Block::default()
+        .bg(self.apptheme.colors.default_background)
         .borders(Borders::ALL)
         .title("Info"));
 
     // Draw Map to right_upper = 0
-    f.render_widget(self.map_canvas(), right_layout[0]);
+    f.render_widget(self.map_canvas(&right_layout[0]), right_layout[0]);
 
     // Draw Read file to right_lower = 1
     f.render_stateful_widget(iolist, right_layout[1], &mut self.stored_styled_iostreamed.state); // CHANGED 
