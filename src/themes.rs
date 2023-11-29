@@ -123,6 +123,8 @@ pub struct ThemeColors {
     pub accent_lpink: Color,
     pub accent_lime: Color,
 
+    pub lblack: Color,
+
 }
 
 
@@ -192,14 +194,15 @@ impl Default for Theme {
             }, 
             regex_style_map: RegexStyleMap{ regex_styles: vec![
                 RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // IP v4
-                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp
+                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp HH:MM:SS
+                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp HH:MM:SS
             ]},
             default_text_style: Style::default().fg(Color::White),
             username_style: Style::default().fg(colors::ACCENT_ORANGE),
             default_background: Style::default().bg(colors::BACKGROUND),
             border_style: Style::default(),
             active_border_style: Style::new().fg(colors::ACCENT_ORANGE),
-            journal_bg: Style::default().bg(Color::Rgb(32, 32, 32)),
+            journal_bg: Style::default().bg(colors::LBLACK),
             fail2ban_bg: Style::default().bg(Color::Rgb(48, 48, 48)),
             highlight_item_style: Style::default()
                                     .fg(Color::Black)
@@ -215,6 +218,7 @@ impl Default for Theme {
                 accent_wred: colors::ACCENT_WRED,
                 accent_lpink: colors::ACCENT_LPINK,
                 accent_lime: colors::ACCENT_LIME,
+                lblack: colors::LBLACK,
             }
          }      
     }

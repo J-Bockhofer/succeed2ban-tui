@@ -1762,6 +1762,7 @@ dependencies = [
  "log",
  "notify",
  "pretty_assertions",
+ "rand",
  "ratatui",
  "regex",
  "reqwest",

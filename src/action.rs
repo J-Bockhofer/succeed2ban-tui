@@ -34,6 +34,9 @@ pub enum Action {
   StartJCtlWatcher,
   StopJCtlWatcher,
   StoppedJCtlWatcher,
+
+  Startup,
+  StartupDone,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -64,6 +67,7 @@ impl<'de> Deserialize<'de> for Action {
           "Help" => Ok(Action::Help),
           "EnterNormal" => Ok(Action::EnterNormal),
           "EnterTakeAction" => Ok(Action::EnterTakeAction),
+          "StartupDone" => Ok(Action::StartupDone),
           // Error
           data if data.starts_with("Error(") => {
             let error_msg = data.trim_start_matches("Error(").trim_end_matches(")");

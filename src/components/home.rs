@@ -84,6 +84,8 @@ pub struct Home<'a> {
 
   last_username: String,
 
+  startup_complete:bool,
+
 }
 
 impl<'a> Home<'a> {
@@ -117,8 +119,8 @@ impl<'a> Home<'a> {
     self.apptheme = themes::Theme::default();
     self.jctlrunning = false;
     self.f2brunning = false;
-    
-
+    self.startup_complete = false;
+  
     self
   }
 
@@ -226,7 +228,7 @@ impl<'a> Home<'a> {
           // if there are any held words push them with default style and reset held words
           if held_unstyled_words.len() > 0 {
 
-            thisline.words.push((held_unstyled_words.join(" "), self.apptheme.default_text_style));
+            thisline.words.push((format!(" {}", held_unstyled_words.join(" ")), self.apptheme.default_text_style));
             held_unstyled_words = vec![];
           }
           // push styled word with space in front - TODO word is in first position
@@ -431,9 +433,11 @@ impl Component for Home<'_> {
   }
 
   fn update(&mut self, action: Action) -> Result<Option<Action>> {
+
     match action {
       Action::Tick => {
       },
+      Action::StartupDone => {self.startup_complete = true; self.command_tx.clone().unwrap().send(Action::Refresh)?;}
       Action::EnterNormal => {self.mode = Mode::Normal;},
       Action::EnterTakeAction => {self.mode = Mode::TakeAction;},
       Action::EnterProcessing => {self.mode = Mode::Processing;},
@@ -499,214 +503,221 @@ impl Component for Home<'_> {
 
   fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
     
-    self.elapsed_rticks += 1;
-    self.elapsed_frames += 1.;
-    const ANIMTICKS: usize = 4;
-    let animsymbols = vec!["|","/","―","\\"];
+    if self.startup_complete {
 
-    if self.elapsed_rticks >= ANIMTICKS {
-      self.elapsed_rticks = 0;
-      
-      //self.infotext = String::from("");
-    }
-
-    if self.elapsed_frames >= 8. {
-      self.elapsed_frames = 0.;
-    }
-
-    let layout = Layout::default()
-      .direction(Direction::Horizontal)
-      .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
-      .split(f.size());
-
-
-    let left_layout = Layout::default()
-      .direction(Direction::Vertical)
-      .constraints([Constraint::Percentage(20), Constraint::Percentage(40), Constraint::Percentage(40)])
-      .split(layout[0]);
-
-    let right_layout = Layout::default()
-      .direction(Direction::Vertical)
-      .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-      .split(layout[1]);
-
-    let av_actions: Vec<ListItem> = self
-    .available_actions
-    .items
-    .iter()
-    .map(|i| {
-        let mut lines = vec![Line::from(i.0)];
-        if i.0 == "Ban" || i.0 == "Unban"
-        {
-          lines.push(
-            format!("X - {}", self.selected_ip)
+      self.elapsed_rticks += 1;
+      self.elapsed_frames += 1.;
+      const ANIMTICKS: usize = 4;
+      let animsymbols = vec!["|","/","―","\\"];
+  
+      if self.elapsed_rticks >= ANIMTICKS {
+        self.elapsed_rticks = 0;
+        
+        //self.infotext = String::from("");
+      }
+  
+      if self.elapsed_frames >= 8. {
+        self.elapsed_frames = 0.;
+      }
+  
+      let layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+        .split(f.size());
+  
+  
+      let left_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(20), Constraint::Percentage(40), Constraint::Percentage(40)])
+        .split(layout[0]);
+  
+      let right_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .split(layout[1]);
+  
+      let av_actions: Vec<ListItem> = self
+      .available_actions
+      .items
+      .iter()
+      .map(|i| {
+          let mut lines = vec![Line::from(i.0)];
+          if i.0 == "Ban" || i.0 == "Unban"
+          {
+            lines.push(
+              format!("X - {}", self.selected_ip)
+                  .italic()
+                  .into(),
+            );          
+          }
+          else {
+            let mut symb = "X";
+            if i.1 == String::from("active") {
+              symb = "✓";
+            }
+            lines.push(
+                format!("{} - {}", symb, i.1)
                 .italic()
                 .into(),
-          );          
-        }
-        else {
-          let mut symb = "X";
-          if i.1 == String::from("active") {
-            symb = "✓";
+            );            
           }
-          lines.push(
-              format!("{} - {}", symb, i.1)
-              .italic()
-              .into(),
-          );            
-        }
-
-
-        ListItem::new(lines).style(Style::default().fg(Color::White))
-    })
-    .collect();
-
-    // Create a List from all list items and highlight the currently selected one
-    let actionlist = List::new(av_actions)
-        .bg(self.apptheme.colors.default_background)
-        .block(Block::default()
-        .borders(Borders::ALL)
-        .border_style( 
-          match self.mode {
-            Mode::TakeAction => {self.apptheme.active_border_style},
-            _ => self.apptheme.border_style,
-          })
-        .title("Actions"))
-        .highlight_style(self.apptheme.highlight_item_style)
-        .highlight_symbol(">> ");
-
-
-    let ips: Vec<ListItem> = self
-    .iplist      // .items
-    .items
-    .iter()
-    .map(|i| {
-        let mut lines = vec![Line::from(format!("{}   {}", i.0, i.2))]; // let mut lines = vec![Line::from(i.0)];
-        lines.push(
-          format!("X - {}, {}", i.1.city, i.1.country)
-              .italic()
-              .into(),
-        );
-        ListItem::new(lines).style(Style::default().fg(Color::White))
-    })
-    .collect();
-
-    // Create a List from all list items and highlight the currently selected one
-    let iplist = List::new(ips)
-        .bg(self.apptheme.colors.default_background)
-        .block(Block::default()
-        .borders(Borders::ALL)
-        .border_style( 
-          match self.mode {
-            Mode::Normal => {self.apptheme.active_border_style},
-            _ => self.apptheme.border_style,
-          })
-        .title("Last IPs"))
-        .highlight_style(self.apptheme.highlight_item_style)
-        .highlight_symbol(">> ");
-
-      let term_w = right_layout[1].width as usize;
-
-      //self.styledio == old
-      let iolines: Vec<ListItem> = self
-        .stored_styled_iostreamed
-        .items 
-        .iter()
-        .map(|i| {
-
-          let mut line: Line = Line::default();
-          for word in i.0.words.clone() {
-            let cspan = Span::styled(word.0, word.1); 
-            line.spans.push(cspan);
-          }
-
-          let bg_style: Style;
-          if i.1 == "Journal" {
-
-            bg_style = self.apptheme.journal_bg;
-          } else {
-            bg_style = self.apptheme.fail2ban_bg;
-          }
-          let line_w = line.width();
-          if line_w < term_w {
-            // fill line with whitespaces
-            let dif = term_w - line_w;
-            let cspan = Span::styled(str::repeat(" ", dif), self.apptheme.default_text_style); 
-            line.spans.push(cspan);
-
-          }
-          line.patch_style(bg_style);
-          ListItem::new(line)
-        })
-        .collect();
-
-      
-
-/*       let iolines: Vec<ListItem> = self
-        .iostreamed
-        .items // change stateful list to simple vector CHANGED
-        .iter()
-        .map(|i| {
-          let stringo = format!("\033[92m{}\x1b[0m",i.0.as_str());
-          ListItem::new(Line::from(i.0.as_str())).style(Style::default().fg(Color::White))
-        })
-        .collect(); */
-      let mut ioactive: u8 = 0;
-      if self.available_actions.items[2].1 == "active" || self.available_actions.items[3].1 == "active" {
-        if self.available_actions.items[2].1 == "active" && self.available_actions.items[3].1 == "active" {
-          ioactive = 2;
-        } else{
-          ioactive = 1;
-        }
-      }
-
-
-      let iolist_title = Line::from(vec![
-        Span::styled(" I/O Stream [ ", Style::default().fg(Color::White)),
-        Span::styled(animsymbols[self.elapsed_rticks],
-          match ioactive { 0 => {Style::default().fg(self.apptheme.colors.accent_wred)}, 1 => {Style::default().fg(self.apptheme.colors.accent_lpink)}, 2 => {Style::default().fg(self.apptheme.colors.accent_blue)} _ => {Style::default().fg(self.apptheme.colors.accent_wred)}}),
-        Span::styled(" ] ", Style::default().fg(Color::White)),
-      ]);
-
-      // list
-      // right_layout[1]
-          
-
+  
+  
+          ListItem::new(lines).style(Style::default().fg(Color::White))
+      })
+      .collect();
+  
       // Create a List from all list items and highlight the currently selected one
-      let iolist = List::new( iolines) //self.styledio.clone()
+      let actionlist = List::new(av_actions)
+          .bg(self.apptheme.colors.lblack)
           .block(Block::default()
-            .bg(self.apptheme.colors.default_background)
-            .borders(Borders::ALL)
-            .border_style( 
-              match self.mode {
-                Mode::Normal => {Style::new().white()},
-                _ => Style::new().white(),
-              })
-            .title(iolist_title)
-          )
+          .borders(Borders::ALL)
+          .border_style( 
+            match self.mode {
+              Mode::TakeAction => {self.apptheme.active_border_style},
+              _ => self.apptheme.border_style,
+            })
+          .title("Actions"))
           .highlight_style(self.apptheme.highlight_item_style)
           .highlight_symbol(">> ");
-
+  
+  
+      let ips: Vec<ListItem> = self
+      .iplist      // .items
+      .items
+      .iter()
+      .map(|i| {
+          let mut lines = vec![Line::from(format!("{}   {}", i.0, i.2))]; // let mut lines = vec![Line::from(i.0)];
+          lines.push(
+            format!("X - {}, {}", i.1.city, i.1.country)
+                .italic()
+                .into(),
+          );
+          ListItem::new(lines).style(Style::default().fg(Color::White))
+      })
+      .collect();
+  
+      // Create a List from all list items and highlight the currently selected one
+      let iplist = List::new(ips)
+          .bg(self.apptheme.colors.lblack)
+          .block(Block::default()
+          .borders(Borders::ALL)
+          .border_style( 
+            match self.mode {
+              Mode::Normal => {self.apptheme.active_border_style},
+              _ => self.apptheme.border_style,
+            })
+          .title("Last IPs"))
+          .highlight_style(self.apptheme.highlight_item_style)
+          .highlight_symbol(">> ");
+  
+        let term_w = right_layout[1].width as usize;
+  
+        //self.styledio == old
+        let iolines: Vec<ListItem> = self
+          .stored_styled_iostreamed
+          .items 
+          .iter()
+          .map(|i| {
+  
+            let mut line: Line = Line::default();
+            for word in i.0.words.clone() {
+              let cspan = Span::styled(word.0, word.1); 
+              line.spans.push(cspan);
+            }
+  
+            let bg_style: Style;
+            if i.1 == "Journal" {
+  
+              bg_style = self.apptheme.journal_bg;
+            } else {
+              bg_style = self.apptheme.fail2ban_bg;
+            }
+            let line_w = line.width();
+            if line_w < term_w {
+              // fill line with whitespaces
+              let dif = term_w - line_w;
+              let cspan = Span::styled(str::repeat(" ", dif), self.apptheme.default_text_style); 
+              line.spans.push(cspan);
+  
+            }
+            line.patch_style(bg_style);
+            ListItem::new(line)
+          })
+          .collect();
+  
+        
+  
+  /*       let iolines: Vec<ListItem> = self
+          .iostreamed
+          .items // change stateful list to simple vector CHANGED
+          .iter()
+          .map(|i| {
+            let stringo = format!("\033[92m{}\x1b[0m",i.0.as_str());
+            ListItem::new(Line::from(i.0.as_str())).style(Style::default().fg(Color::White))
+          })
+          .collect(); */
+        let mut ioactive: u8 = 0;
+        if self.available_actions.items[2].1 == "active" || self.available_actions.items[3].1 == "active" {
+          if self.available_actions.items[2].1 == "active" && self.available_actions.items[3].1 == "active" {
+            ioactive = 2;
+          } else{
+            ioactive = 1;
+          }
+        }
+  
+  
+        let iolist_title = Line::from(vec![
+          Span::styled(" I/O Stream [ ", Style::default().fg(Color::White)),
+          Span::styled(animsymbols[self.elapsed_rticks],
+            match ioactive { 0 => {Style::default().fg(self.apptheme.colors.accent_wred)}, 1 => {Style::default().fg(self.apptheme.colors.accent_lpink)}, 2 => {Style::default().fg(self.apptheme.colors.accent_blue)} _ => {Style::default().fg(self.apptheme.colors.accent_wred)}}),
+          Span::styled(" ] ", Style::default().fg(Color::White)),
+        ]);
+  
+        // list
+        // right_layout[1]
+            
+  
+        // Create a List from all list items and highlight the currently selected one
+        let iolist = List::new( iolines) //self.styledio.clone()
+            .block(Block::default()
+              .bg(self.apptheme.colors.lblack)
+              .borders(Borders::ALL)
+              .border_style( 
+                match self.mode {
+                  Mode::Normal => {Style::new().white()},
+                  _ => Style::new().white(),
+                })
+              .title(iolist_title)
+            )
+            .highlight_style(self.apptheme.highlight_item_style)
+            .highlight_symbol(">> ");
+  
+        
+        let infoblock = Paragraph::new(format!("{}-numIn-{}-numLinesLast-{}",self.infotext.clone(), self.elapsed_notify.to_string(), self.debug_me))
+          .set_style(Style::default())
+          .block(Block::default()
+          .bg(self.apptheme.colors.lblack)
+          .borders(Borders::ALL)
+          .title("Info"));
+  
+      // Draw Map to right_upper = 0
+      f.render_widget(self.map_canvas(&right_layout[0]), right_layout[0]);
+  
+      // Draw Read file to right_lower = 1
+      f.render_stateful_widget(iolist, right_layout[1], &mut self.stored_styled_iostreamed.state); // CHANGED 
+      // f.render_widget(iolist, right_layout[1]);
       
-      let infoblock = Paragraph::new(format!("{}-numIn-{}-numLinesLast-{}",self.infotext.clone(), self.elapsed_notify.to_string(), self.debug_me))
-        .set_style(Style::default())
-        .block(Block::default()
-        .bg(self.apptheme.colors.default_background)
-        .borders(Borders::ALL)
-        .title("Info"));
+      f.render_widget(infoblock, left_layout[0]);
+  
+      f.render_stateful_widget(iplist, left_layout[1], &mut self.iplist.state);
+  
+      f.render_stateful_widget(actionlist, left_layout[2], &mut self.available_actions.state);
+    } else {
+      f.render_widget(Paragraph::new("hello world"), area);
+    }
 
-    // Draw Map to right_upper = 0
-    f.render_widget(self.map_canvas(&right_layout[0]), right_layout[0]);
 
-    // Draw Read file to right_lower = 1
-    f.render_stateful_widget(iolist, right_layout[1], &mut self.stored_styled_iostreamed.state); // CHANGED 
-    // f.render_widget(iolist, right_layout[1]);
-    
-    f.render_widget(infoblock, left_layout[0]);
-
-    f.render_stateful_widget(iplist, left_layout[1], &mut self.iplist.state);
-
-    f.render_stateful_widget(actionlist, left_layout[2], &mut self.available_actions.state);
 
     Ok(())
   }

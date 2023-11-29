@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio::process::Command;
 
+use crate::components::startup::Startup;
 use crate::{
   action::Action,
   components::{home::Home, fps::FpsCounter, Component},
@@ -39,12 +40,13 @@ impl App {
   pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
     let home = Home::new();
     let fps = FpsCounter::default();
+    let startup = Startup::default();
     let config = Config::new()?;
-    let mode = Mode::Home;
+    let mode = Mode::Startup;
     Ok(Self {
       tick_rate,
       frame_rate,
-      components: vec![Box::new(home), Box::new(fps)], //Box::new(home), Box::new(fps)
+      components: vec![Box::new(home), Box::new(fps), Box::new(startup)], //Box::new(home), Box::new(fps)
       should_quit: false,
       should_suspend: false,
       config,
@@ -153,6 +155,7 @@ impl App {
           Action::Quit => self.should_quit = true,
           Action::Suspend => self.should_suspend = true,
           Action::Resume => self.should_suspend = false,
+          Action::StartupDone => self.mode = Mode::Home,
           Action::Resize(w, h) => {
             tui.resize(Rect::new(0, 0, w, h))?;
             tui.draw(|f| {
