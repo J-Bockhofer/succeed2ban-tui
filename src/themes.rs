@@ -124,6 +124,7 @@ pub struct ThemeColors {
     pub accent_lime: Color,
 
     pub lblack: Color,
+    pub ddblue: Color,
 
 }
 
@@ -143,6 +144,10 @@ pub struct Theme {
     pub username_style: Style,
     pub journal_bg: Style,
     pub fail2ban_bg: Style,
+    pub selected_ip_bg: Style,
+    // Multi purpose Regex
+    pub ipregex: Regex,
+
     // UI Styling
     pub default_background: Style,
     pub border_style: Style,
@@ -151,6 +156,8 @@ pub struct Theme {
     // Const Colors
     pub colors: ThemeColors,
 
+    // Timing
+    pub decay_time: tokio::time::Duration,
 
 } 
 
@@ -164,16 +171,22 @@ impl Theme {
         active_border_style: Style,
         journal_bg: Style,
         fail2ban_bg: Style,
+        selected_ip_bg: Style,
+        ipregex: Regex,
         highlight_item_style: Style, 
         colors: ThemeColors,
+        decay_time: tokio::time::Duration,
         ) -> Self 
 
         {
         Theme { word_style_map, regex_style_map, default_text_style, username_style, default_background, border_style, active_border_style, 
             journal_bg,
             fail2ban_bg,
+            selected_ip_bg,
+            ipregex,
             highlight_item_style,
             colors,
+            decay_time,
         }
     }
 }
@@ -182,7 +195,7 @@ impl Default for Theme {
     fn default() -> Self {
         //Theme::new()
         Theme { word_style_map: WordStyleMap{ word_styles: vec![
-                    WordStylePair::new(String::from("Found"), Style::default().fg(colors::ACCENT_DBLUE)),
+                    WordStylePair::new(String::from("Found"), Style::default().fg(colors::ACCENT_ORANGE)),
                     WordStylePair::new(String::from("Ban"), Style::default().fg(colors::ACCENT_ORANGE)),
                     WordStylePair::new(String::from("INFO"), Style::default().fg(colors::ACCENT_DBLUE)),
                     WordStylePair::new(String::from("WARNING"), Style::default().fg(colors::ACCENT_LPINK)),
@@ -204,6 +217,8 @@ impl Default for Theme {
             active_border_style: Style::new().fg(colors::ACCENT_ORANGE),
             journal_bg: Style::default().bg(colors::LBLACK),
             fail2ban_bg: Style::default().bg(Color::Rgb(48, 48, 48)),
+            selected_ip_bg: Style::default().bg(colors::EMPTY),
+            ipregex: Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(),
             highlight_item_style: Style::default()
                                     .fg(Color::Black)
                                     .bg(colors::ACCENT_BLUE)
@@ -219,7 +234,9 @@ impl Default for Theme {
                 accent_lpink: colors::ACCENT_LPINK,
                 accent_lime: colors::ACCENT_LIME,
                 lblack: colors::LBLACK,
-            }
+                ddblue: colors::DDBLUE,
+            },
+            decay_time: tokio::time::Duration::from_secs(10),
          }      
     }
 }

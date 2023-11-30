@@ -155,7 +155,7 @@ impl <'a> Startup <'a> {
 
     if self.elapsed_frames > 12. {
         self.elapsed_frames = 0.;
-        if self.num_ticks > 20 {
+        if self.num_ticks > 12 {
             self.mode = Mode::Done;
             let _ = self.action_tx.clone().unwrap().send(Action::StartupDone);
         }
@@ -284,6 +284,7 @@ impl Component for Startup <'_> {
               geodata.is_banned = is_banned;
               geodata.banned_times = match is_banned {false => 0, true => 1};
               geodata.country = geocountry;
+              geodata.countrycode = geocountrycode;
               geodata.city = geocity;
               geodata.region = georegionname;
               geodata.warnings = 1;

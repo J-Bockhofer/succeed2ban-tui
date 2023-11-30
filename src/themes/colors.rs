@@ -12,3 +12,9 @@ pub const ACCENT_LPINK: Color = Color::Rgb(232,209,220);
 pub const ACCENT_LIME: Color = Color::Rgb(203,248,182);
 
 pub const LBLACK: Color = Color::Rgb(32, 32, 32);
+pub const DDBLUE: Color = Color::Rgb(32,38,72);
+//(32,55,114);
+pub const EMPTY: Color = Color::Rgb(0,0,0);
+
+// Nice Fat Blue
+pub const BBLUE: Color = Color::Rgb(36,71,146);

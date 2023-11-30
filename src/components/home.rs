@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use color_eyre::eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, ModifierKeyCode};
 use futures::{TryFutureExt, FutureExt};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
@@ -40,6 +40,16 @@ pub enum Mode {
   Processing,
 }
 
+
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+pub enum DrawMode {
+  #[default]
+  Sticky,
+  Decaying,
+  All,
+}
+
+
 #[derive(Default)]
 pub struct Home<'a> {
   command_tx: Option<UnboundedSender<Action>>,
@@ -53,6 +63,7 @@ pub struct Home<'a> {
   pub keymap: HashMap<KeyEvent, Action>,
   pub input: Input,
   pub mode: Mode,
+  pub drawmode: DrawMode,
   elapsed_rticks: usize,
   elapsed_frames: f64,
 
@@ -65,6 +76,8 @@ pub struct Home<'a> {
 
   last_direction: (f64, f64), //tuple vector2D that points towards home; 0/x = lon, 1/y = lat
   // home - last 
+  point_dir_vec: Vec<((f64, f64), (f64, f64), Option<tokio::time::Instant>)>,
+
 
   infotext: String,
   elapsed_notify: usize,
@@ -74,8 +87,8 @@ pub struct Home<'a> {
   //styledio: Vec<StyledLine>,
 
   //stored_styled_lines: Vec<StyledLine>,
-
-  stored_styled_iostreamed: StatefulList<(StyledLine, String)>,
+                                                      //f2b or journal // IP
+  stored_styled_iostreamed: StatefulList<(StyledLine, String, String)>,
 
   apptheme: themes::Theme,
 
@@ -85,6 +98,8 @@ pub struct Home<'a> {
   last_username: String,
 
   startup_complete:bool,
+
+  time_last: Option<tokio::time::Instant>,
 
 }
 
@@ -114,12 +129,16 @@ impl<'a> Home<'a> {
     ]);
     self.last_lat = 53.0416;
     self.last_lon = 8.9433;
+    self.point_dir_vec = vec![];
+
+
     self.home_lat = 53.0416;
     self.home_lon = 8.9433;
     self.apptheme = themes::Theme::default();
     self.jctlrunning = false;
     self.f2brunning = false;
     self.startup_complete = false;
+    self.drawmode = DrawMode::Decaying;
   
     self
   }
@@ -133,6 +152,28 @@ impl<'a> Home<'a> {
 
     let w = f64::from(area.width.clone());
     let h = f64::from(area.height.clone());
+
+    let mut num_iter: usize;
+    let mut decayedvec: Vec<bool> = vec![];
+    for _ in 0..self.point_dir_vec.len() {
+      decayedvec.push(false);
+    }
+
+    match self.drawmode {
+      DrawMode::Sticky => {num_iter = 1; if self.point_dir_vec.len() == 0 {num_iter = 0;}}, // single line stays forever
+      DrawMode::Decaying => {
+        
+        for i in 0..self.point_dir_vec.len() {
+          let time_last = self.point_dir_vec[i].2.unwrap_or_else(||{tokio::time::Instant::now()});
+          if time_last.elapsed() > self.apptheme.decay_time {
+            decayedvec[i] = true;
+          } 
+        }
+        num_iter = self.point_dir_vec.len();
+
+      }, // single line decays
+      DrawMode::All => {num_iter = self.point_dir_vec.len();}, // all lines sticky
+    }
 
     canvas::Canvas::default()
         .background_color(self.apptheme.colors.default_background)
@@ -151,29 +192,57 @@ impl<'a> Home<'a> {
                 color: self.apptheme.colors.default_map_color,
                 resolution: canvas::MapResolution::High,
             });
-            // draw line to home
-            ctx.draw(&canvas::Line {
-              x1: self.home_lon,
-              y1: self.home_lat,
-              x2: self.last_lon,
-              y2: self.last_lat,
-              color:self.apptheme.colors.accent_dblue,
-            }); 
 
-            ctx.draw(&canvas::Line {
-              x1: self.last_lon + self.last_direction.0 * map_range((0.,7.), (0.,1.), self.elapsed_frames),
-              y1: self.last_lat + self.last_direction.1 * map_range((0.,7.), (0.,1.), self.elapsed_frames),
-              x2: self.last_lon,
-              y2: self.last_lat,
-              color: self.apptheme.colors.accent_blue,
-            });
-           
-            ctx.draw(&canvas::Circle {
-              x: self.last_lon, // lon
-              y: self.last_lat, // lat
-              radius: self.elapsed_frames,
-              color: self.apptheme.colors.accent_orange,
-            });
+            for i in 0..num_iter {
+              let idx = self.point_dir_vec.len() - i - 1;
+
+              if decayedvec[i] {
+                continue;
+              }
+              
+              let x2 = self.point_dir_vec[idx].0.0;
+              let y2 =  self.point_dir_vec[idx].0.1;
+              let dir = self.point_dir_vec[idx].1;
+
+            
+              // draw line to home
+              ctx.draw(&canvas::Line {
+                x1: self.home_lon,
+                y1: self.home_lat,
+                x2: x2,
+                y2: y2,
+                color:self.apptheme.colors.accent_dblue,
+              }); 
+
+              ctx.draw(&canvas::Line {
+                x1: x2 + dir.0 * map_range((0.,7.), (0.,1.), self.elapsed_frames),
+                y1: y2 + dir.1 * map_range((0.,7.), (0.,1.), self.elapsed_frames),
+                x2: x2,
+                y2: y2,
+                color: self.apptheme.colors.accent_blue,
+              });
+            
+              ctx.draw(&canvas::Circle {
+                x: x2, // lon
+                y: y2, // lat
+                radius: self.elapsed_frames,
+                color: self.apptheme.colors.accent_orange,
+              });
+
+            }
+
+            if num_iter == 0 {
+              ctx.draw(&canvas::Circle {
+                x: self.last_lon, // lon
+                y: self.last_lat, // lat
+                radius: self.elapsed_frames,
+                color: self.apptheme.colors.accent_orange,
+              });
+
+            }
+            
+
+
             //ctx.print(self.last_lon, self.last_lat, "X".red());
             ctx.print(self.home_lon, self.home_lat, Line::from(Span::styled("H", Style::default().fg(self.apptheme.colors.accent_orange))));
         })
@@ -203,6 +272,17 @@ impl<'a> Home<'a> {
       }
       let mut thisline: StyledLine = StyledLine::default();
       // do word_map matching first then regex match splitting
+      // look for ip quickly to send it out to the list
+      let results: Vec<&str> = self.apptheme.ipregex
+      .captures_iter(tmp_line)
+      .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
+      .collect();
+      let mut cip: &str = "";
+      if !results.is_empty() {
+        cip = results[0];
+      }
+
+
       let words: Vec<&str> = tmp_line.split(" ").collect();
       let mut held_unstyled_words: Vec<&str> = vec![];
       let mut last_word: &str= "";
@@ -212,7 +292,7 @@ impl<'a> Home<'a> {
         if word_style == Style::default() {
           // try regex styling on word
           word_style = self.apptheme.regex_style_map.get_style_or_default(word.to_string()); // Detector for regex
-        }
+        } 
         if last_word == "user" {
           word_style = self.apptheme.username_style;
           self.last_username = word.to_string();
@@ -246,9 +326,9 @@ impl<'a> Home<'a> {
       }
 
       
-
+      
       //self.stored_styled_lines.push(thisline);
-      self.stored_styled_iostreamed.items.push((thisline, last_io.clone()));
+      self.stored_styled_iostreamed.items.push((thisline, last_io.clone(), cip.to_string()));
       self.stored_styled_iostreamed.trim_to_length(20);
 
     }// end per line
@@ -277,6 +357,14 @@ impl Component for Home<'_> {
       Mode::Normal => {
         match key.code {
           KeyCode::Esc => Action::Quit,
+          KeyCode::Char(keychar) => {
+            match keychar {
+              'A'|'a' => {self.drawmode = DrawMode::All; Action::Render},
+              'S'|'s' => {self.drawmode = DrawMode::Sticky; Action::Render},
+              'D'|'d' => {self.drawmode = DrawMode::Decaying; Action::Render},
+              _ => {Action::Render}
+            }
+          },
           KeyCode::Down => {
             //println!("Arrow Down");
             if self.iplist.items.len() > 0 {
@@ -291,6 +379,13 @@ impl Component for Home<'_> {
               self.last_lon = lon;
   
               self.last_direction = (self.home_lon - self.last_lon, self.home_lat - self.last_lat);
+
+              self.point_dir_vec.push(((self.last_lon,self.last_lat), self.last_direction, Some(tokio::time::Instant::now())));
+              if self.point_dir_vec.len() > 10 {
+                while self.point_dir_vec.len() > 10 {
+                  self.point_dir_vec.remove(0);
+                }
+              }                
             }
 
 
@@ -309,6 +404,14 @@ impl Component for Home<'_> {
               self.last_lon = lon;
 
               self.last_direction = (self.home_lon - self.last_lon, self.home_lat - self.last_lat);
+
+              self.point_dir_vec.push(((self.last_lon,self.last_lat),self.last_direction, Some(tokio::time::Instant::now())));
+              if self.point_dir_vec.len() > 10 {
+                while self.point_dir_vec.len() > 10 {
+                  self.point_dir_vec.remove(0);
+                }
+              }              
+
             }
             Action::Render
           },
@@ -317,6 +420,7 @@ impl Component for Home<'_> {
           },
           KeyCode::Left => {
             self.iplist.unselect();
+            self.selected_ip = "".to_string();
             Action::Render
           },
           KeyCode::Tab => {
@@ -460,7 +564,7 @@ impl Component for Home<'_> {
         //let country_code = x.country_code;
         //let isp = x.isp;
         //let region_name = x.region_name;
-
+        //self.time_last = Some(tokio::time::Instant::now());
         let geolat = x.lat.clone();
         let geolon = x.lon.clone();
 
@@ -469,12 +573,21 @@ impl Component for Home<'_> {
 
         self.last_direction = (self.home_lon - self.last_lon, self.home_lat - self.last_lat);
 
+        // : Vec<((f64, f64), (f64, f64))>,
+        self.point_dir_vec.push(((self.last_lon,self.last_lat),self.last_direction, Some(tokio::time::Instant::now())));
+
         let cipvec = self.iplist.items.clone();
 
         if !cipvec.iter().any(|i| i.0==cip) {
 
           self.iplist.items.push((cip, x.clone(), self.last_username.clone()));
           self.iplist.trim_to_length(10); // change to const
+          if self.point_dir_vec.len() > 10 {
+            while self.point_dir_vec.len() > 10 {
+              self.point_dir_vec.remove(0);
+            }
+          }
+
           if self.iplist.items.len() > 1 {
             self.iplist.state.select(Option::Some(self.iplist.items.len()-1));
           }
@@ -632,14 +745,18 @@ impl Component for Home<'_> {
               let cspan = Span::styled(word.0, word.1); 
               line.spans.push(cspan);
             }
-  
-            let bg_style: Style;
+
+            let mut bg_style: Style;
             if i.1 == "Journal" {
-  
               bg_style = self.apptheme.journal_bg;
             } else {
               bg_style = self.apptheme.fail2ban_bg;
             }
+
+            if i.2 == self.selected_ip {
+              bg_style = self.apptheme.selected_ip_bg;
+            }
+
             let line_w = line.width();
             if line_w < term_w {
               // fill line with whitespaces
