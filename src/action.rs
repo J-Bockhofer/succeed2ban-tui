@@ -1,6 +1,7 @@
 use std::fmt;
 
-use crate::gen_structs;
+use crate::migrations::schema;
+use rusqlite::{Connection, Result};
 
 use serde::{
   de::{self, Deserializer, Visitor},
@@ -25,7 +26,7 @@ pub enum Action {
   IONotify(String),
   //FetchGeo(gen_structs::Geodata),
 
-  GotGeo(gen_structs::Geodata),
+  GotGeo(schema::IP),
   Ban,
   BanIP(String),
   Banned(bool),
@@ -35,7 +36,14 @@ pub enum Action {
   StopJCtlWatcher,
   StoppedJCtlWatcher,
 
-  Startup,
+  StartupConnect,
+  StartupConnected,
+
+
+  StartupConnectedDB,
+  StartupCreateDB,
+
+
   StartupDone,
 }
 

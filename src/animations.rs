@@ -1,26 +1,24 @@
-
-use serde::Serialize;
-use ratatui::{prelude::*, widgets::*};
+use ratatui::widgets::ListState;
 
 
 #[derive(Default)]
-pub struct StatefulList<T> {
+pub struct Animation<T> {
   pub state: ListState,
-  pub items: Vec<T>,
+  pub keyframes: Vec<T>,
 }
 
-impl<T> StatefulList<T> {
-  pub fn with_items(items: Vec<T>) -> StatefulList<T> {
-      StatefulList {
+impl<T> Animation<T> {
+  pub fn with_items(keyframes: Vec<T>) -> Animation<T> {
+      Animation {
           state: ListState::default(),
-          items,
+          keyframes,
       }
   }
 
   pub fn next(&mut self) {
       let i = match self.state.selected() {
           Some(i) => {
-              if i >= self.items.len() - 1 {
+              if i >= self.keyframes.len() - 1 {
                   0
               } else {
                   i + 1
@@ -36,7 +34,7 @@ impl<T> StatefulList<T> {
       let i = match self.state.selected() {
           Some(i) => {
               if i == 0 {
-                  self.items.len() - 1
+                  self.keyframes.len() - 1
               } else {
                   i - 1
               }
@@ -46,17 +44,4 @@ impl<T> StatefulList<T> {
       self.state.select(Some(i));
   }
 
-  pub fn unselect(&mut self) {
-      self.state.select(None);
-  }
-
-  pub fn trim_to_length(&mut self, max_length: usize) {
-    while self.items.len() > max_length {
-        self.items.remove(0);
-    }
-  }
 }
-
-
-
-

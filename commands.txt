@@ -1,0 +1,5 @@
+// iptable v4 list
+
+iptables -L -n -v --line-numbers
+
+

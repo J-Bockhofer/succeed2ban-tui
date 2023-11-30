@@ -12,8 +12,8 @@ use super::{Component, Frame};
 use crate::{
   action::Action,
   config::{Config, KeyBindings},
-  geofetcher, gen_structs::Geodata, gen_structs::StatefulList,
-  themes,
+  geofetcher, gen_structs::StatefulList,
+  themes, animations, migrations::schema,
 };
 
 use tui_input::{backend::crossterm::EventHandler, Input};
@@ -48,7 +48,7 @@ pub struct Home<'a> {
   available_actions: StatefulList<(&'a str, String)>,
   //iostreamed: StatefulList<(String, usize)>, // do i need a tuple here? // CHANGED
   //iostreamed: Vec<(String, usize)>,
-  iplist: StatefulList<(String, Geodata, String)>,
+  iplist: StatefulList<(String, schema::IP, String)>,
   pub last_events: Vec<KeyEvent>,
   pub keymap: HashMap<KeyEvent, Action>,
   pub input: Input,
@@ -447,6 +447,9 @@ impl Component for Home<'_> {
 
         self.elapsed_notify += 1;
         self.style_incoming_message(x.clone());
+
+        //return Ok(Some(Action::GetGeo));
+        //self.command_tx.clone().unwrap().send(Action::GetGeo);
         
       },
       Action::GotGeo(x) => {
@@ -471,7 +474,7 @@ impl Component for Home<'_> {
         if !cipvec.iter().any(|i| i.0==cip) {
 
           self.iplist.items.push((cip, x.clone(), self.last_username.clone()));
-          self.iplist.trim_to_length(10);
+          self.iplist.trim_to_length(10); // change to const
           if self.iplist.items.len() > 1 {
             self.iplist.state.select(Option::Some(self.iplist.items.len()-1));
           }
@@ -588,8 +591,12 @@ impl Component for Home<'_> {
       .iter()
       .map(|i| {
           let mut lines = vec![Line::from(format!("{}   {}", i.0, i.2))]; // let mut lines = vec![Line::from(i.0)];
+          let mut symb = "X";
+          if i.1.is_banned  {
+            symb = "✓";
+          }
           lines.push(
-            format!("X - {}, {}", i.1.city, i.1.country)
+            format!("{} - {}, {}", symb, i.1.city, i.1.country)
                 .italic()
                 .into(),
           );

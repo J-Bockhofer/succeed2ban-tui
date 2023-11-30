@@ -6,6 +6,12 @@ use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio::process::Command;
 
+
+use rusqlite::{Connection, Result as ConnectionResult};
+use tokio::sync::Mutex;
+use std::sync::Arc;
+
+
 use crate::components::startup::Startup;
 use crate::{
   action::Action,
@@ -15,7 +21,8 @@ use crate::{
   tui,
   tasks,
   geofetcher,
-  gen_structs::{self, Geodata},
+  gen_structs,
+  migrations::schema,
 };
 
 use regex::Regex;
@@ -31,16 +38,17 @@ pub struct App {
   pub mode: Mode,
   pub last_tick_key_events: Vec<KeyEvent>,
   pub last_ip: String,
-  pub stored_geo: Vec<gen_structs::Geodata>,
+  pub stored_geo: Vec<schema::IP>,
   f2bw_handle: Option<JoinHandle<()>>,
   jctl_handle: Option<JoinHandle<()>>,
+  dbconn: Option<Connection>,
 }
 
 impl App {
   pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
     let home = Home::new();
     let fps = FpsCounter::default();
-    let startup = Startup::default();
+    let startup = Startup::new();
     let config = Config::new()?;
     let mode = Mode::Startup;
     Ok(Self {
@@ -56,6 +64,8 @@ impl App {
       stored_geo: Vec::new(),
       f2bw_handle: Option::None,
       jctl_handle: Option::None,
+      dbconn: Option::None,
+      
     })
   }
 
@@ -155,7 +165,7 @@ impl App {
           Action::Quit => self.should_quit = true,
           Action::Suspend => self.should_suspend = true,
           Action::Resume => self.should_suspend = false,
-          Action::StartupDone => self.mode = Mode::Home,
+          Action::StartupDone => self.mode = Mode::Home, //
           Action::Resize(w, h) => {
             tui.resize(Rect::new(0, 0, w, h))?;
             tui.draw(|f| {
@@ -177,7 +187,12 @@ impl App {
               }
             })?;
           },
-          Action::IONotify(ref x) => {
+          Action::StartupConnect => {
+             
+          }
+/*           Action::IONotify(ref x) => {
+
+
             let re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
             let results: Vec<&str> = re
               .captures_iter(x)
@@ -236,7 +251,7 @@ impl App {
 
             }
 
-          },
+          }, */
           Action::BanIP(ref x) => {
             
             let response = Command::new("echo")
