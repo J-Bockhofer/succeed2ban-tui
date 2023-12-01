@@ -5,12 +5,14 @@
 /// 
 /// Holds the DB connection and handles queries.
 
+use std::sync::OnceLock;
 
 
 use std::{collections::HashMap, time::Duration};
 
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
+use lazy_static::__Deref;
 use log::error;
 use ratatui::{prelude::*, widgets::*};
 use tokio::sync::mpsc::UnboundedSender;
@@ -71,10 +73,14 @@ pub struct Startup <'a>{
 
   // Animations
   anim_dotdotdot: Animation<&'a str>,
+  anim_charsoup: Animation<&'a str>,
 
   // tmp
   last_ip: String,
   stored_geo: Vec<schema::IP>,
+
+  // startup line
+  startup_lines: Vec<&'a str>,
 
 }
 
@@ -84,7 +90,35 @@ impl <'a> Startup <'a> {
   }
 
   fn set_items(mut self) -> Self {
-    self.anim_dotdotdot = Animation::with_items(vec![".", "..", "..."]); // WHY THE FUCK IS THIS EMPTY ??????v bxdx,bd ,xd,v
+    self.anim_dotdotdot = Animation::with_items(vec![".", "..", "..."]); 
+    self.anim_charsoup = Animation::with_items(vec!["dcc&ßm-)44sas/a.sc&%cßd%acb8ß0bj
+  )1d.yß.1ybd4e.)-j6155dßße0#4(-6&
+  m/.,5ess#05%-ssâ3/jej-cs6s.e.s-s
+  d-s)38&m-a/s-0s/bjbd6%ssmb0-b(&(
+  b%3(bcjc4(a0/3c0c1(4-,3//eß,8ß/y", "%d.%%%d#(,bâ-s&)3y3ac5y#64-&-/s,
+    dßsyßâ#c&#6mdßbj6m6&65(cs/sy1yß%
+    41,..,j08&#6,68&yß-s1d4âs6b#e,a&
+    8.yy36s,y56c(5d-c8.&/%&58s35s,s6
+    /)-.5#&,ß01my&&sce033ß8-)ma/cc6s", "sßâßyc&-/â,65.ma/#5eâ/ya4/&dc&m
+    .10ems.css4(m33mßay84yj.cße4yd&
+    &e-8#36#y,yse,a0syy(/ßm-563ßc5y1
+    5#ccs&-e(â-1ß113ßsjd-j-.,a#j3(c
+    s351-ac3b)c#b.0(b,)a5085d4,s0c&d",
+    "â6c#.8(ms/)&381câd6â%1b,sâßcde1s
+    eß13âsß3s#8j.ca&5ß%s/#âj&a.md%ß-
+    ßeys)sß4â5s63ßsd%31,88c4ß-b.b%5c
+    .#)344aese#s&d/%â5sa,c)./bs4cs-j
+    ,dsme(jâ5(6%s5.bc,eb-36ycce5e,5d",
+    "/)c%#mgfc.-m,-mykm-hcshyy##&4y))
+    (1c/ß/k4,./6%ch.ßmg7-429hdfk%c)/
+    dyksh-%,ym.âc1g)dh-âs/yd%l%.4c,7
+    .l0#-sh9k/6kl/l,a.,cyâ00m2.%hl-,
+    sâs-ß1-%h(.yyßhaamyc2ßk7l)c.gcßf",
+    "gd0)â6%9c.d7170âhdk-4/6a0-#kdylh
+    c7k7ß#s1)2(ß(.h92â2g2gsg#46c(gh#
+    aß6,algâds&/)0,y(-mâk&d2lhcß(-(m
+    -#4.f,f&))â07c-9,l)c&#4g,/c%)â%h
+    lf0ß4dl09f7/mms#.d2hmf44gf-c-10m"]);
     self
   }
 
@@ -102,8 +136,14 @@ impl <'a> Startup <'a> {
 
     self.dbconn.as_ref().unwrap().execute(schema::CREATE_IP_DB_SQL, []).expect("Error setting up IP db");
 
+    self.dbconn.as_ref().unwrap().execute(schema::CREATE_MESSAGE_DB_SQL, []).expect("Error setting up IP db");
+
     let dt = Utc::now();
     self.log_messages.push(format!("{}            db ready", dt.to_string()));
+
+    self.log_messages.push(format!("{}            Deciphering binaries", dt.to_string()));
+    
+
   }
 
   pub fn set_rng_points(mut self) -> Self {
@@ -133,6 +173,7 @@ impl <'a> Startup <'a> {
     log::info!("Tick");
     self.num_ticks += 1;
     self.anim_dotdotdot.next();
+    self.anim_charsoup.next();
     self.app_ticker = self.app_ticker.saturating_add(1);
     self.last_events.drain(..);
   }
@@ -172,6 +213,20 @@ impl <'a> Startup <'a> {
 impl Component for Startup <'_> {
 
   fn init(&mut self, area: Rect) -> Result<()> {
+
+      self.startup_lines =  vec![
+        "Swallowing logfiles",
+       "Setting up stderr",
+        "Mar",
+         "Apr",
+          "May", 
+          "Jun",
+           "Jul",
+            "Aug",
+             "Sep",
+              "Oct",
+               "Nov",
+                "Dec"];
       
       self.action_tx.clone().unwrap().send(Action::StartupConnect).expect("Action::StartupConnect failed to send!");
 
@@ -211,19 +266,21 @@ impl Component for Startup <'_> {
       },
       Action::IONotify(ref x) => {
         // got new line
-
+        let x = x.clone().deref().to_string();
         let re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
         let results: Vec<&str> = re
-          .captures_iter(x)
+          .captures_iter(&x)
           .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
           .collect();
         let cip: &str;
         // filtered for IP
 
+
         if !results.is_empty() {
           cip = results[0];
           // string contained an IPv4
 
+          std::thread::sleep(std::time::Duration::from_millis(100));
           // check if is banned
           let output = std::process::Command::new("fail2ban-client")
             .arg("status")
@@ -250,6 +307,7 @@ impl Component for Startup <'_> {
 
           let maybe_data = schema::select_ip(conn, cip).unwrap_or_default().take().unwrap_or_default();
 
+        
           if maybe_data == schema::IP::default() {
             // we have to fetch the data
             let timestamp = chrono::offset::Local::now();
@@ -292,20 +350,20 @@ impl Component for Startup <'_> {
               
 
             
-              sender.send(Action::GotGeo(geodata)).unwrap_or_default();
+              sender.send(Action::GotGeo(geodata, x.clone())).unwrap_or_default();
             });
             
           }
           else {
             // data is stored
-            self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data))?;  
+            self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data, x.clone()))?;  
           }
 
 
         }
 
       },
-      Action::GotGeo(x) => {
+      Action::GotGeo(x, y) => {
 
         let conn = self.dbconn.as_ref().unwrap();
         let mut ip = schema::select_ip(conn, x.ip.as_str()).unwrap_or_default().unwrap_or_default();
@@ -375,6 +433,21 @@ impl Component for Startup <'_> {
             Some(x.countrycode.as_str()), x.banned_times, 
               x.is_banned, ip.warnings).unwrap();
         }
+
+        let mut is_jctl: bool = true;
+        let mut is_ban: bool = false;
+        if y.contains("++++") {
+          is_jctl = false;
+          if y.contains("Ban") {
+            is_ban = true;
+          }
+        }
+
+        let timestamp = chrono::offset::Local::now();
+
+        let _ = schema::insert_new_message(conn, Option::None, &timestamp.to_string(), &y, &x.ip, is_jctl, is_ban).unwrap();
+
+
         //self.stored_geo.push(x.clone()); 
       }
       _ => (),
@@ -440,6 +513,9 @@ impl Component for Startup <'_> {
             .x_bounds([-180.0, 180.0])
             .y_bounds([-90.0, 90.0]);         
 
+            let frame_idx = self.anim_charsoup.state.selected().unwrap_or_default();
+            let selected_soup = self.anim_charsoup.keyframes[frame_idx];
+            
             
             let frame_idx = self.anim_dotdotdot.state.selected().unwrap_or_default();
             let selected_frame = self.anim_dotdotdot.keyframes[frame_idx];
@@ -453,6 +529,7 @@ impl Component for Startup <'_> {
               
               if i == num_msgs - 1 {
                 loglines.push(Line::from(format!("{}{}", self.log_messages[i], selected_frame)));
+                loglines.push(Line::from(format!("{}", selected_soup)));
               } else {
                 loglines.push(Line::from(format!("{}", self.log_messages[i])));
               }

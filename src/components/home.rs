@@ -14,6 +14,7 @@ use crate::{
   config::{Config, KeyBindings},
   geofetcher, gen_structs::StatefulList,
   themes, animations, migrations::schema,
+  action_handlers::list_actions,
 };
 
 use tui_input::{backend::crossterm::EventHandler, Input};
@@ -100,6 +101,8 @@ pub struct Home<'a> {
   startup_complete:bool,
 
   time_last: Option<tokio::time::Instant>,
+  
+  last_mode: Mode,
 
 }
 
@@ -250,6 +253,7 @@ impl<'a> Home<'a> {
         .y_bounds([-90.0, 90.0])
   }
 
+  
 
 
   pub fn style_incoming_message(&mut self, msg: String) {
@@ -329,7 +333,7 @@ impl<'a> Home<'a> {
       
       //self.stored_styled_lines.push(thisline);
       self.stored_styled_iostreamed.items.push((thisline, last_io.clone(), cip.to_string()));
-      self.stored_styled_iostreamed.trim_to_length(20);
+      self.stored_styled_iostreamed.trim_to_length(100);
 
     }// end per line
 
@@ -359,10 +363,22 @@ impl Component for Home<'_> {
           KeyCode::Esc => Action::Quit,
           KeyCode::Char(keychar) => {
             match keychar {
-              'A'|'a' => {self.drawmode = DrawMode::All; Action::Render},
-              'S'|'s' => {self.drawmode = DrawMode::Sticky; Action::Render},
-              'D'|'d' => {self.drawmode = DrawMode::Decaying; Action::Render},
-              _ => {Action::Render}
+              // DrawMode switching
+              'A'|'a' => {self.drawmode = DrawMode::All; Action::Blank},
+              'S'|'s' => {self.drawmode = DrawMode::Sticky; Action::Blank},
+              'D'|'d' => {self.drawmode = DrawMode::Decaying; Action::Blank},
+              // IO-ListNavigation
+              'J'|'j' => {self.last_mode = self.mode; Action::LogsSchedulePrevious}, // up
+              'H'|'h' => {self.last_mode = self.mode; Action::LogsScheduleFirst}, // top
+              'K'|'k' => {self.last_mode = self.mode; Action::LogsScheduleNext},  // down
+              'L'|'l' => {self.last_mode = self.mode; Action::LogsScheduleLast}, // bottom
+              'N'|'n' => {self.stored_styled_iostreamed.unselect(); Action::Blank}, // unselect
+              // IP-ListNavigation
+              // -- ArrowKeys
+
+
+              _ => {//Action::Render
+                Action::Blank}
             }
           },
           KeyCode::Down => {
@@ -378,9 +394,10 @@ impl Component for Home<'_> {
               self.last_lat = lat;
               self.last_lon = lon;
   
-              self.last_direction = (self.home_lon - self.last_lon, self.home_lat - self.last_lat);
+              let last_direction = (self.home_lon - self.last_lon, self.home_lat - self.last_lat);
 
-              self.point_dir_vec.push(((self.last_lon,self.last_lat), self.last_direction, Some(tokio::time::Instant::now())));
+              self.last_direction = last_direction;
+              self.point_dir_vec.push(((lon, lat), last_direction, Some(tokio::time::Instant::now())));
               if self.point_dir_vec.len() > 10 {
                 while self.point_dir_vec.len() > 10 {
                   self.point_dir_vec.remove(0);
@@ -389,7 +406,8 @@ impl Component for Home<'_> {
             }
 
 
-            Action::Render
+            //Action::Render
+            Action::Blank
           },
           KeyCode::Up => {
             if self.iplist.items.len() > 0 {
@@ -413,7 +431,8 @@ impl Component for Home<'_> {
               }              
 
             }
-            Action::Render
+            //Action::Render
+            Action::Blank
           },
           KeyCode::Right => {
             Action::EnterTakeAction
@@ -421,7 +440,8 @@ impl Component for Home<'_> {
           KeyCode::Left => {
             self.iplist.unselect();
             self.selected_ip = "".to_string();
-            Action::Render
+            //Action::Render
+            Action::Blank
           },
           KeyCode::Tab => {
             Action::EnterTakeAction
@@ -432,7 +452,8 @@ impl Component for Home<'_> {
           },
           _ => {
             self.input.handle_event(&crossterm::event::Event::Key(key));
-            Action::Render
+            //Action::Render
+            Action::Blank
           },
         }}
       Mode::TakeAction => {
@@ -441,22 +462,23 @@ impl Component for Home<'_> {
             Action::EnterNormal
           },
           KeyCode::Left => {
-            Action::EnterNormal
+            self.available_actions.unselect();
+            Action::EnterNormal 
           },
           KeyCode::Down => {
             //println!("Arrow Down");
 
             self.available_actions.next(); 
 
-            
-            Action::Render
-
+            //Action::Render
+            Action::Blank
           },
           KeyCode::Up => {
 
             self.available_actions.previous();
 
-            Action::Render
+            //Action::Render
+            Action::Blank
           },
           KeyCode::Right => {
             let action_idx = self.available_actions.state.selected().unwrap();
@@ -488,7 +510,8 @@ impl Component for Home<'_> {
                   Action::StartJCtlWatcher  
                 }
               },
-              _ => {Action::Render},
+              _ => {//Action::Render
+                Action::Blank},
             }
           }, 
           KeyCode::Enter => {
@@ -522,12 +545,32 @@ impl Component for Home<'_> {
                 }
 
               },
-              _ => {Action::Render},
+              _ => {//Action::Render
+                Action::Blank},
             }
-          }       
+          },
+          KeyCode::Char(keychar) => {
+            match keychar {
+              // DrawMode switching
+              'A'|'a' => {self.drawmode = DrawMode::All; Action::Blank},
+              'S'|'s' => {self.drawmode = DrawMode::Sticky; Action::Blank},
+              'D'|'d' => {self.drawmode = DrawMode::Decaying; Action::Blank},
+              // IO-ListNavigation
+              'J'|'j' => {self.last_mode = self.mode; Action::LogsSchedulePrevious}, // up
+              'H'|'h' => {self.last_mode = self.mode; Action::LogsScheduleLast}, // top
+              'K'|'k' => {self.last_mode = self.mode; Action::LogsScheduleNext},  // down
+              'L'|'l' => {self.last_mode = self.mode; Action::LogsScheduleFirst}, // bottom
+              'N'|'n' => {self.stored_styled_iostreamed.unselect(); Action::Blank}, // unselect
+
+
+              _ => {//Action::Render
+                Action::Blank}
+            }
+          },       
           _ => {
             self.input.handle_event(&crossterm::event::Event::Key(key));
-            Action::Render
+            //Action::Render
+            Action::Blank
           },
         }
       },
@@ -542,21 +585,39 @@ impl Component for Home<'_> {
       Action::Tick => {
       },
       Action::StartupDone => {self.startup_complete = true; self.command_tx.clone().unwrap().send(Action::Refresh)?;}
-      Action::EnterNormal => {self.mode = Mode::Normal;},
-      Action::EnterTakeAction => {self.mode = Mode::TakeAction;},
+      Action::EnterNormal => {self.mode = Mode::Normal; self.last_mode = self.mode;},
+      Action::EnterTakeAction => {self.mode = Mode::TakeAction; self.last_mode = self.mode;},
       Action::EnterProcessing => {self.mode = Mode::Processing;},
-      Action::ExitProcessing => {self.mode = Mode::Normal;},
+      Action::ExitProcessing => {self.mode = self.last_mode;}, // TODO: Last mode, solved?
+
+      // List Actions
+      // -- LOG LIST -- iostreamed
+      Action::LogsScheduleNext => {list_actions::schedule_next_loglist(self.command_tx.clone().unwrap());},
+      Action::LogsNext => {self.stored_styled_iostreamed.next();},
+      Action::LogsSchedulePrevious => {list_actions::schedule_previous_loglist(self.command_tx.clone().unwrap());},
+      Action::LogsPrevious => {self.stored_styled_iostreamed.previous();},
+      Action::LogsScheduleFirst => {list_actions::schedule_first_loglist(self.command_tx.clone().unwrap());},
+      Action::LogsFirst => {  self.stored_styled_iostreamed.state.select(Some(0)) },
+      Action::LogsScheduleLast => {list_actions::schedule_last_loglist(self.command_tx.clone().unwrap());},
+      Action::LogsLast => {  let idx = Some(self.stored_styled_iostreamed.items.len() - 1);
+        self.stored_styled_iostreamed.state.select(idx); },
+      // -- IP LIST -- iplist
+
+
+
       Action::StoppedJCtlWatcher => {self.jctlrunning = false;},
       Action::IONotify(x) => {
 
         self.elapsed_notify += 1;
-        self.style_incoming_message(x.clone());
+       
 
         //return Ok(Some(Action::GetGeo));
         //self.command_tx.clone().unwrap().send(Action::GetGeo);
         
       },
-      Action::GotGeo(x) => {
+      Action::GotGeo(x,y) => {
+
+        self.style_incoming_message(y.clone());
 
         let cip = x.ip.clone();
         //let city = x.city;
@@ -579,8 +640,9 @@ impl Component for Home<'_> {
         let cipvec = self.iplist.items.clone();
 
         if !cipvec.iter().any(|i| i.0==cip) {
+          // if cip isnt in vector yet
 
-          self.iplist.items.push((cip, x.clone(), self.last_username.clone()));
+          self.iplist.items.push((cip.clone(), x.clone(), self.last_username.clone()));
           self.iplist.trim_to_length(10); // change to const
           if self.point_dir_vec.len() > 10 {
             while self.point_dir_vec.len() > 10 {
@@ -594,6 +656,8 @@ impl Component for Home<'_> {
           else {
             self.iplist.state.select(Option::Some(0));
           }
+          self.selected_ip = cip;
+          
 
 
         }        
@@ -691,7 +755,9 @@ impl Component for Home<'_> {
           .border_style( 
             match self.mode {
               Mode::TakeAction => {self.apptheme.active_border_style},
-              _ => self.apptheme.border_style,
+              _ => {  let mut style = self.apptheme.border_style;
+                if self.last_mode == Mode::TakeAction {style = self.apptheme.active_border_style}
+                style},
             })
           .title("Actions"))
           .highlight_style(self.apptheme.highlight_item_style)
@@ -725,7 +791,9 @@ impl Component for Home<'_> {
           .border_style( 
             match self.mode {
               Mode::Normal => {self.apptheme.active_border_style},
-              _ => self.apptheme.border_style,
+              _ => {  let mut style = self.apptheme.border_style;
+                if self.last_mode == Mode::Normal {style = self.apptheme.active_border_style}
+                style},
             })
           .title("Last IPs"))
           .highlight_style(self.apptheme.highlight_item_style)
@@ -814,7 +882,7 @@ impl Component for Home<'_> {
                 })
               .title(iolist_title)
             )
-            .highlight_style(self.apptheme.highlight_item_style)
+            //.highlight_style(self.apptheme.highlight_item_style)
             .highlight_symbol(">> ");
   
         

@@ -285,6 +285,72 @@ pub fn select_ip(conn: &Connection, ip:&str) -> Result<Option<IP>> {
 }
 
 
+#[derive(Default, Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
+pub struct Message {
+    pub id: usize,
+    pub created_at: String,
+    pub text: String,
+    pub ip: String,
+    pub is_jctl: bool,
+    pub is_ban:bool,
+}
+
+pub const CREATE_MESSAGE_DB_SQL: &str = "CREATE TABLE IF NOT EXISTS messages(
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    text TEXT NOT NULL,
+    ip TEXT NOT NULL REFERENCES ipmeta(ip),
+    is_jctl INTEGER NOT NULL,
+    is_ban INTEGER NOT NULL
+)
+";
+
+pub fn insert_new_message(conn: &Connection, id: Option<usize>, created_at:&str,  text:&str, ip:&str, is_jctl:bool, is_ban:bool) -> Result<()> {
+    let _id = id.unwrap_or(0);
+    if _id == 0 {
+        conn.execute(
+            "INSERT OR REPLACE INTO messages (created_at, text, ip, is_jctl, is_ban) VALUES (?1, ?2, ?3, ?4, ?5)",
+            (created_at, text, ip, is_jctl, is_ban),
+        )?;
+    } else {
+        conn.execute(
+            "INSERT OR REPLACE INTO messages (id, created_at, text, ip, is_jctl) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (_id, created_at, text, ip, is_jctl, is_ban),
+        )?;       
+    }
+
+    Ok(())
+}
+pub fn select_message_by_ip(conn: &Connection, ip:&str) -> Result<Vec<Option<Message>>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM messages WHERE ip=:ip;"
+    )?;    
+    let ip_iter = stmt.query_map(&[(":ip", ip)], |row| {
+        Ok( Message {
+            id: row.get(0)?,
+            created_at: row.get(1)?,
+            text: row.get(2)?,
+            ip: row.get(3)?,
+            is_jctl: row.get(4)?,
+            is_ban: row.get(5)?,
+        })
+    })?;
+
+    let mut results: Vec<Option<Message>> = vec![];
+
+    for raip in ip_iter {
+        let aip = raip.unwrap_or_default();
+        if aip.ip == ip {
+            results.push(Some(aip));
+        }
+        else {
+            results.push(Option::None);
+        }
+    }
+    Ok(results)   
+}
+
+
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 pub struct Geodata {
@@ -317,6 +383,7 @@ mod test {
         conn.execute(schema::CREATE_REGION_DB_SQL, []).expect("Error setting up Region db");
         conn.execute(schema::CREATE_ISP_DB_SQL, []).expect("Error setting up ISP db");
         conn.execute(schema::CREATE_IP_DB_SQL, []).expect("Error setting up IP db");
+        conn.execute(schema::CREATE_MESSAGE_DB_SQL, []).expect("Error setting up IP db");
         Ok(())
     }
 
@@ -328,6 +395,7 @@ mod test {
         let _ = schema::insert_new_city(&conn, "Humburg", "Doitschland", "Undetussen",Some(0), Some(0)).expect("City insertion failed");
         let _ = schema::insert_new_ISP(&conn,"Telecum", Some(0), Some(0)).expect("ISP insertion failed");
         let _ = schema::insert_new_IP(&conn, "111.233.456.678", "2022-03-11 23:45:31:512", "3.12", "59.79", "Telecum", "Humburg", Some("Undetussen"), "Doitschland", Some("DDE"), 0, false, 0).expect("IP insertion failed");
+        let _ = schema::insert_new_message(&conn, Option::None, "2022-03-11 23:45:31:512","OMG SUCH A MESSAGE", "111.233.456.678", true, false).expect("Message insertion failed");
         Ok(())
     }
 
@@ -370,6 +438,33 @@ mod test {
         assert_eq!(isp.name, "Doitschland".to_string());
         Ok(())
     }
+
+    #[test]
+    pub fn test_query_and_serialize_message_by_ip() -> Result<()> {
+        let conn = Connection::open("test.db")?;
+        let msgs = schema::select_message_by_ip(&conn, "111.233.456.678").unwrap();
+
+        let mut rmsgs: Vec<schema::Message> = vec![];
+
+        let mut res: &str = "";
+
+        for msg in msgs.into_iter() {
+            let m = msg.unwrap_or_default();
+            if m != schema::Message::default() {
+                rmsgs.push(m);
+            }
+        }
+
+        if !rmsgs.is_empty() {
+            // stuff in vec
+            res = rmsgs[0].ip.as_str();
+        }
+
+
+        assert_eq!(res, "111.233.456.678".to_string());
+        Ok(())
+    }
+
 
 }
 

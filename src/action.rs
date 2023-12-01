@@ -3,6 +3,8 @@ use std::fmt;
 use crate::migrations::schema;
 use rusqlite::{Connection, Result};
 
+
+
 use serde::{
   de::{self, Deserializer, Visitor},
   Deserialize, Serialize,
@@ -19,14 +21,30 @@ pub enum Action {
   Refresh,
   Error(String),
   Help,
+
   EnterNormal,
   EnterTakeAction,
   EnterProcessing,
   ExitProcessing,
+
+  Blank,
+
+  // List state actions
+  // -- LOG LIST -- iostreamed
+  LogsScheduleNext,
+  LogsSchedulePrevious,
+  LogsNext,
+  LogsPrevious,
+  LogsScheduleFirst,
+  LogsScheduleLast,
+  LogsFirst,
+  LogsLast,
+
+
   IONotify(String),
   //FetchGeo(gen_structs::Geodata),
 
-  GotGeo(schema::IP),
+  GotGeo(schema::IP, String),
   Ban,
   BanIP(String),
   Banned(bool),
