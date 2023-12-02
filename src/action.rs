@@ -39,6 +39,19 @@ pub enum Action {
   LogsScheduleLast,
   LogsFirst,
   LogsLast,
+  // -- IP LIST -- iplist
+  IPsScheduleNext,
+  IPsSchedulePrevious,
+  IPsNext,
+  IPsPrevious,
+  IPsUnselect,
+  //IPs
+  // -- ACTION LIST -- available_actions
+  ActionsScheduleNext,
+  ActionsSchedulePrevious,
+  ActionsNext,
+  ActionsPrevious,
+  
 
 
   IONotify(String),

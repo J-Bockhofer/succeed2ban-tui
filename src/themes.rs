@@ -206,13 +206,13 @@ impl Default for Theme {
                     WordStylePair::new(String::from("NOTICE"), Style::default().fg(colors::ACCENT_LIME)),
                     WordStylePair::new(String::from("user"), Style::default().fg(colors::ACCENT_BLUE)),
                     WordStylePair::new(String::from("fatal:"), Style::default().fg(colors::ACCENT_ORANGE)),
-                    //WordStylePair::new(String::from("[sshd]"), Style::default().fg(Color::Rgb(138, 43, 226))),
+                    WordStylePair::new(String::from("Accepted"), Style::default().fg(colors::ACCENT_LIME)),
                 ]
             }, 
             regex_style_map: RegexStyleMap{ regex_styles: vec![
                 RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // IP v4
                 RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp HH:MM:SS
-                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp HH:MM:SS
+                //RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp HH:MM:SS
             ]},
             default_text_style: Style::default().fg(Color::White),
             username_style: Style::default().fg(colors::ACCENT_ORANGE),

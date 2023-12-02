@@ -173,7 +173,7 @@ impl <'a> Startup <'a> {
     log::info!("Tick");
     self.num_ticks += 1;
     self.anim_dotdotdot.next();
-    self.anim_charsoup.next();
+
     self.app_ticker = self.app_ticker.saturating_add(1);
     self.last_events.drain(..);
   }
@@ -181,7 +181,8 @@ impl <'a> Startup <'a> {
   pub fn render_tick(&mut self) {
     log::debug!("Render Tick");
     self.elapsed_frames += 1.;
-
+    self.anim_charsoup.next();
+    
     if self.elapsed_frames == 1. {
         let mut rng = rand::thread_rng();
         let x: f64 = 0.;//rng.gen_range(-180.0..180.0);

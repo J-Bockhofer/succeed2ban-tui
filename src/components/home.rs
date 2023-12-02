@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, time::Duration, ops::Index};
 
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, ModifierKeyCode};
@@ -26,6 +26,61 @@ use regex::Regex;
 struct StyledLine {
   words: Vec<(String, Style)>,
 }
+
+#[derive(Clone, PartialEq)]
+struct PointData {
+  pub ip: String,
+  pub lon: f64,
+  pub lat: f64,
+  pub dir_home_lon: f64,
+  pub dir_home_lat: f64,
+  pub start_time: tokio::time::Instant,
+  pub is_alive: bool,
+}
+
+impl PointData {
+  pub fn new(ip: String, lon:f64, lat:f64, dir_lon: f64, dir_lat: f64)-> Self {
+    PointData { ip, lon, lat, dir_home_lon: dir_lon, dir_home_lat: dir_lat, start_time: tokio::time::Instant::now(), is_alive: true }
+  }
+  pub fn decay_point(&mut self, decaytime: tokio::time::Duration) {
+    if self.start_time.elapsed() > decaytime {
+      self.is_alive = false;
+    } 
+    else {
+      self.is_alive = true;
+    }
+  }
+
+  pub fn refresh(&mut self) {
+    let timenow = tokio::time::Instant::now();
+    self.is_alive = true;
+    self.start_time = timenow;
+  }
+  
+}
+
+impl Default for PointData {
+   fn default() -> Self {
+      PointData::new(String::default(), f64::default(), f64::default(), f64::default(), f64::default())
+  }
+}
+
+//iplist: StatefulList<(String, schema::IP, String)>,
+#[allow(non_snake_case)]
+#[derive(Clone, Default)]
+struct IPListItem {
+  pub IP: schema::IP,
+  pub username: String,
+  pub pointdata: PointData,
+}
+#[allow(non_snake_case)]
+impl IPListItem {
+  pub fn new(IP:schema::IP, username:String, pointdata: PointData)-> Self {
+    IPListItem { IP, username, pointdata}
+  }
+}
+
+
 
 fn map_range(from_range: (f64, f64), to_range: (f64, f64), s: f64) -> f64 {
   to_range.0 + (s - from_range.0) * (to_range.1 - to_range.0) / (from_range.1 - from_range.0)
@@ -59,7 +114,7 @@ pub struct Home<'a> {
   available_actions: StatefulList<(&'a str, String)>,
   //iostreamed: StatefulList<(String, usize)>, // do i need a tuple here? // CHANGED
   //iostreamed: Vec<(String, usize)>,
-  iplist: StatefulList<(String, schema::IP, String)>,
+  
   pub last_events: Vec<KeyEvent>,
   pub keymap: HashMap<KeyEvent, Action>,
   pub input: Input,
@@ -77,19 +132,19 @@ pub struct Home<'a> {
 
   last_direction: (f64, f64), //tuple vector2D that points towards home; 0/x = lon, 1/y = lat
   // home - last 
-  point_dir_vec: Vec<((f64, f64), (f64, f64), Option<tokio::time::Instant>)>,
 
+
+
+  iplist: StatefulList<IPListItem>,
 
   infotext: String,
   elapsed_notify: usize,
   debug_me: String,
 
-  //styledio: Vec<ListItem<'a>>,
-  //styledio: Vec<StyledLine>,
 
-  //stored_styled_lines: Vec<StyledLine>,
                                                       //f2b or journal // IP
   stored_styled_iostreamed: StatefulList<(StyledLine, String, String)>,
+  //stored_styled_iostreamed: StatefulList<IOListItem>, Todo ?
 
   apptheme: themes::Theme,
 
@@ -99,8 +154,6 @@ pub struct Home<'a> {
   last_username: String,
 
   startup_complete:bool,
-
-  time_last: Option<tokio::time::Instant>,
   
   last_mode: Mode,
 
@@ -132,7 +185,6 @@ impl<'a> Home<'a> {
     ]);
     self.last_lat = 53.0416;
     self.last_lon = 8.9433;
-    self.point_dir_vec = vec![];
 
 
     self.home_lat = 53.0416;
@@ -156,26 +208,27 @@ impl<'a> Home<'a> {
     let w = f64::from(area.width.clone());
     let h = f64::from(area.height.clone());
 
-    let mut num_iter: usize;
-    let mut decayedvec: Vec<bool> = vec![];
-    for _ in 0..self.point_dir_vec.len() {
-      decayedvec.push(false);
-    }
+    let mut visible_points: Vec<PointData> = vec![];
 
-    match self.drawmode {
-      DrawMode::Sticky => {num_iter = 1; if self.point_dir_vec.len() == 0 {num_iter = 0;}}, // single line stays forever
-      DrawMode::Decaying => {
-        
-        for i in 0..self.point_dir_vec.len() {
-          let time_last = self.point_dir_vec[i].2.unwrap_or_else(||{tokio::time::Instant::now()});
-          if time_last.elapsed() > self.apptheme.decay_time {
-            decayedvec[i] = true;
-          } 
-        }
-        num_iter = self.point_dir_vec.len();
-
-      }, // single line decays
-      DrawMode::All => {num_iter = self.point_dir_vec.len();}, // all lines sticky
+    for item in self.iplist.items.clone() {
+      match self.drawmode {
+        DrawMode::Sticky => {
+          // push only item with selected ip
+          if item.IP.ip == self.selected_ip {
+            visible_points.push(item.pointdata);
+          }
+        },
+        DrawMode::Decaying => {
+          // decay only make visible when alive, refresh alive upon selection
+          if item.pointdata.is_alive {
+            visible_points.push(item.pointdata);
+          }
+        },
+        DrawMode::All =>{
+          // push every cloned item
+          visible_points.push(item.pointdata);
+        },
+      }
     }
 
     canvas::Canvas::default()
@@ -196,17 +249,12 @@ impl<'a> Home<'a> {
                 resolution: canvas::MapResolution::High,
             });
 
-            for i in 0..num_iter {
-              let idx = self.point_dir_vec.len() - i - 1;
 
-              if decayedvec[i] {
-                continue;
-              }
-              
-              let x2 = self.point_dir_vec[idx].0.0;
-              let y2 =  self.point_dir_vec[idx].0.1;
-              let dir = self.point_dir_vec[idx].1;
+            for pointdata in &visible_points {
 
+              let x2 = pointdata.lon;
+              let y2 =  pointdata.lat;
+              let dir = (pointdata.dir_home_lon, pointdata.dir_home_lat);
             
               // draw line to home
               ctx.draw(&canvas::Line {
@@ -234,14 +282,13 @@ impl<'a> Home<'a> {
 
             }
 
-            if num_iter == 0 {
+            if self.iplist.items.len() == 0 {
               ctx.draw(&canvas::Circle {
                 x: self.last_lon, // lon
                 y: self.last_lat, // lat
                 radius: self.elapsed_frames,
                 color: self.apptheme.colors.accent_orange,
               });
-
             }
             
 
@@ -253,7 +300,6 @@ impl<'a> Home<'a> {
         .y_bounds([-90.0, 90.0])
   }
 
-  
 
 
   pub fn style_incoming_message(&mut self, msg: String) {
@@ -368,10 +414,10 @@ impl Component for Home<'_> {
               'S'|'s' => {self.drawmode = DrawMode::Sticky; Action::Blank},
               'D'|'d' => {self.drawmode = DrawMode::Decaying; Action::Blank},
               // IO-ListNavigation
-              'J'|'j' => {self.last_mode = self.mode; Action::LogsSchedulePrevious}, // up
-              'H'|'h' => {self.last_mode = self.mode; Action::LogsScheduleFirst}, // top
-              'K'|'k' => {self.last_mode = self.mode; Action::LogsScheduleNext},  // down
-              'L'|'l' => {self.last_mode = self.mode; Action::LogsScheduleLast}, // bottom
+              'J'|'j' => {self.last_mode = self.mode; Action::LogsPrevious}, // up // LogsSchedulePrevious Schedule locks me out with resetting modes
+              'H'|'h' => {self.last_mode = self.mode; Action::LogsFirst}, // top
+              'K'|'k' => {self.last_mode = self.mode; Action::LogsNext},  // down
+              'L'|'l' => {self.last_mode = self.mode; Action::LogsLast}, // bottom
               'N'|'n' => {self.stored_styled_iostreamed.unselect(); Action::Blank}, // unselect
               // IP-ListNavigation
               // -- ArrowKeys
@@ -381,62 +427,9 @@ impl Component for Home<'_> {
                 Action::Blank}
             }
           },
-          KeyCode::Down => {
-            //println!("Arrow Down");
-            if self.iplist.items.len() > 0 {
-              self.iplist.next();
-            
-              let sel_idx = self.iplist.state.selected().unwrap();
-              self.selected_ip = self.iplist.items[sel_idx].0.clone();
-              let lat = self.iplist.items[sel_idx].1.lat.clone().parse::<f64>().unwrap();
-              let lon = self.iplist.items[sel_idx].1.lon.clone().parse::<f64>().unwrap();
-  
-              self.last_lat = lat;
-              self.last_lon = lon;
-  
-              let last_direction = (self.home_lon - self.last_lon, self.home_lat - self.last_lat);
-
-              self.last_direction = last_direction;
-              self.point_dir_vec.push(((lon, lat), last_direction, Some(tokio::time::Instant::now())));
-              if self.point_dir_vec.len() > 10 {
-                while self.point_dir_vec.len() > 10 {
-                  self.point_dir_vec.remove(0);
-                }
-              }                
-            }
-
-
-            //Action::Render
-            Action::Blank
-          },
-          KeyCode::Up => {
-            if self.iplist.items.len() > 0 {
-              self.iplist.previous();
-            
-              let sel_idx = self.iplist.state.selected().unwrap();
-              self.selected_ip = self.iplist.items[sel_idx].0.clone();
-              let lat = self.iplist.items[sel_idx].1.lat.clone().parse::<f64>().unwrap();
-              let lon = self.iplist.items[sel_idx].1.lon.clone().parse::<f64>().unwrap();
-
-              self.last_lat = lat;
-              self.last_lon = lon;
-
-              self.last_direction = (self.home_lon - self.last_lon, self.home_lat - self.last_lat);
-
-              self.point_dir_vec.push(((self.last_lon,self.last_lat),self.last_direction, Some(tokio::time::Instant::now())));
-              if self.point_dir_vec.len() > 10 {
-                while self.point_dir_vec.len() > 10 {
-                  self.point_dir_vec.remove(0);
-                }
-              }              
-
-            }
-            //Action::Render
-            Action::Blank
-          },
-          KeyCode::Right => {
-            Action::EnterTakeAction
-          },
+          KeyCode::Down => {Action::IPsNext},
+          KeyCode::Up => {Action::IPsPrevious},
+          KeyCode::Right => {Action::EnterTakeAction},
           KeyCode::Left => {
             self.iplist.unselect();
             self.selected_ip = "".to_string();
@@ -456,6 +449,8 @@ impl Component for Home<'_> {
             Action::Blank
           },
         }}
+
+        //////////////
       Mode::TakeAction => {
         match key.code {
           KeyCode::Tab => {
@@ -556,10 +551,10 @@ impl Component for Home<'_> {
               'S'|'s' => {self.drawmode = DrawMode::Sticky; Action::Blank},
               'D'|'d' => {self.drawmode = DrawMode::Decaying; Action::Blank},
               // IO-ListNavigation
-              'J'|'j' => {self.last_mode = self.mode; Action::LogsSchedulePrevious}, // up
-              'H'|'h' => {self.last_mode = self.mode; Action::LogsScheduleLast}, // top
-              'K'|'k' => {self.last_mode = self.mode; Action::LogsScheduleNext},  // down
-              'L'|'l' => {self.last_mode = self.mode; Action::LogsScheduleFirst}, // bottom
+              'J'|'j' => {Action::LogsSchedulePrevious}, // up
+              'H'|'h' => {Action::LogsScheduleLast}, // top
+              'K'|'k' => {Action::LogsScheduleNext},  // down
+              'L'|'l' => {Action::LogsScheduleFirst}, // bottom
               'N'|'n' => {self.stored_styled_iostreamed.unselect(); Action::Blank}, // unselect
 
 
@@ -587,21 +582,38 @@ impl Component for Home<'_> {
       Action::StartupDone => {self.startup_complete = true; self.command_tx.clone().unwrap().send(Action::Refresh)?;}
       Action::EnterNormal => {self.mode = Mode::Normal; self.last_mode = self.mode;},
       Action::EnterTakeAction => {self.mode = Mode::TakeAction; self.last_mode = self.mode;},
-      Action::EnterProcessing => {self.mode = Mode::Processing;},
-      Action::ExitProcessing => {self.mode = self.last_mode;}, // TODO: Last mode, solved?
+      Action::EnterProcessing => { self.mode = Mode::Processing;}, // self.last_mode = self.mode;
+      Action::ExitProcessing => {self.mode = self.last_mode;}, // TODO: Last mode, solved? No we have to look into the future to see if we want to change to same again and then forgo that
 
       // List Actions
       // -- LOG LIST -- iostreamed
-      Action::LogsScheduleNext => {list_actions::schedule_next_loglist(self.command_tx.clone().unwrap());},
-      Action::LogsNext => {self.stored_styled_iostreamed.next();},
-      Action::LogsSchedulePrevious => {list_actions::schedule_previous_loglist(self.command_tx.clone().unwrap());},
-      Action::LogsPrevious => {self.stored_styled_iostreamed.previous();},
-      Action::LogsScheduleFirst => {list_actions::schedule_first_loglist(self.command_tx.clone().unwrap());},
+      Action::LogsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsNext);},
+      Action::LogsNext => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.next();}},
+      Action::LogsSchedulePrevious => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsPrevious);}, // {list_actions::schedule_previous_loglist(self.command_tx.clone().unwrap());},
+      Action::LogsPrevious => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.previous();}},
+      Action::LogsScheduleFirst => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsFirst);},
       Action::LogsFirst => {  self.stored_styled_iostreamed.state.select(Some(0)) },
-      Action::LogsScheduleLast => {list_actions::schedule_last_loglist(self.command_tx.clone().unwrap());},
+      Action::LogsScheduleLast => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsLast);},
       Action::LogsLast => {  let idx = Some(self.stored_styled_iostreamed.items.len() - 1);
         self.stored_styled_iostreamed.state.select(idx); },
       // -- IP LIST -- iplist
+      Action::IPsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::IPsNext);},
+      Action::IPsNext => {            
+        if self.iplist.items.len() > 0 {
+          self.iplist.next();
+          let sel_idx = self.iplist.state.selected().unwrap();
+          self.iplist.items[sel_idx].pointdata.refresh();
+        }
+      },
+      Action::IPsSchedulePrevious => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::IPsPrevious);},
+      Action::IPsPrevious => {            
+        if self.iplist.items.len() > 0 {
+          self.iplist.previous();
+          let sel_idx = self.iplist.state.selected().unwrap();
+          self.iplist.items[sel_idx].pointdata.refresh();
+        }
+      },
+
 
 
 
@@ -626,29 +638,35 @@ impl Component for Home<'_> {
         //let isp = x.isp;
         //let region_name = x.region_name;
         //self.time_last = Some(tokio::time::Instant::now());
-        let geolat = x.lat.clone();
-        let geolon = x.lon.clone();
+        //let geolat = x.lat.clone();
+        //let geolon = x.lon.clone();
 
-        self.last_lat = geolat.parse::<f64>().unwrap();
-        self.last_lon = geolon.parse::<f64>().unwrap();
 
-        self.last_direction = (self.home_lon - self.last_lon, self.home_lat - self.last_lat);
 
         // : Vec<((f64, f64), (f64, f64))>,
-        self.point_dir_vec.push(((self.last_lon,self.last_lat),self.last_direction, Some(tokio::time::Instant::now())));
+        
 
         let cipvec = self.iplist.items.clone();
 
-        if !cipvec.iter().any(|i| i.0==cip) {
+        if !cipvec.iter().any(|i| i.IP.ip==cip) {
           // if cip isnt in vector yet
+          let lat = x.lat.clone().parse::<f64>().unwrap();
+          let lon = x.lon.clone().parse::<f64>().unwrap();
+          let dir_lat = self.home_lat - lat;
+          let dir_lon = self.home_lon - lon;
 
-          self.iplist.items.push((cip.clone(), x.clone(), self.last_username.clone()));
+          self.last_lat = lat.clone();
+          self.last_lon = lon.clone();
+  
+          self.last_direction = (dir_lon, dir_lat);
+
+          let pointdata = PointData::new(cip.clone(), lon, lat, dir_lon, dir_lat);
+
+          let iplistitem = IPListItem::new(x.clone(), self.last_username.clone(), pointdata);
+
+          //self.iplist.items.push((cip.clone(), x.clone(), self.last_username.clone()));
+          self.iplist.items.push(iplistitem);
           self.iplist.trim_to_length(10); // change to const
-          if self.point_dir_vec.len() > 10 {
-            while self.point_dir_vec.len() > 10 {
-              self.point_dir_vec.remove(0);
-            }
-          }
 
           if self.iplist.items.len() > 1 {
             self.iplist.state.select(Option::Some(self.iplist.items.len()-1));
@@ -660,13 +678,23 @@ impl Component for Home<'_> {
           
 
 
-        }        
+        } 
+        else {
+          // ip is already in vector, need to select it again
+          for i in 0..self.iplist.items.len() {
+            let item = &self.iplist.items[i];
+            if item.IP.ip == cip {
+              self.iplist.state.select(Some(i));
+              break;
+            }
+          }
+        }    
       },
       Action::Ban => {
         let sel_ip = self.iplist.state.selected();
         let banip: String;
         if sel_ip.is_some() {
-          banip = self.iplist.items[sel_ip.unwrap()].0.clone();
+          banip = self.iplist.items[sel_ip.unwrap()].IP.ip.clone();
           self.command_tx.clone().unwrap().send(Action::BanIP(banip))?;
 
         } else {
@@ -685,6 +713,10 @@ impl Component for Home<'_> {
     
     if self.startup_complete {
 
+      for item in &mut self.iplist.items {
+        item.pointdata.decay_point(self.apptheme.decay_time);
+      }
+      
       self.elapsed_rticks += 1;
       self.elapsed_frames += 1.;
       const ANIMTICKS: usize = 4;
@@ -769,13 +801,13 @@ impl Component for Home<'_> {
       .items
       .iter()
       .map(|i| {
-          let mut lines = vec![Line::from(format!("{}   {}", i.0, i.2))]; // let mut lines = vec![Line::from(i.0)];
+          let mut lines = vec![Line::from(format!("{}   {}", i.IP.ip, i.username))]; // let mut lines = vec![Line::from(i.0)];
           let mut symb = "X";
-          if i.1.is_banned  {
+          if i.IP.is_banned  {
             symb = "✓";
           }
           lines.push(
-            format!("{} - {}, {}", symb, i.1.city, i.1.country)
+            format!("{} - {}, {}", symb, i.IP.city, i.IP.country)
                 .italic()
                 .into(),
           );
@@ -886,7 +918,7 @@ impl Component for Home<'_> {
             .highlight_symbol(">> ");
   
         
-        let infoblock = Paragraph::new(format!("{}-numIn-{}-numLinesLast-{}",self.infotext.clone(), self.elapsed_notify.to_string(), self.debug_me))
+        let infoblock = Paragraph::new(format!("Received I/O: {} -{}-numLinesLast- dbg-msg:   {}",self.infotext.clone(), self.elapsed_notify.to_string(), self.debug_me))
           .set_style(Style::default())
           .block(Block::default()
           .bg(self.apptheme.colors.lblack)
