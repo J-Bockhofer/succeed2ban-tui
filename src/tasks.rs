@@ -1,10 +1,13 @@
 use std::io::{Seek, BufReader, BufRead};
-use notify::{Watcher, RecursiveMode, Result, RecommendedWatcher, Config};
+use notify::{Watcher, RecursiveMode, Result, RecommendedWatcher, Config, Event};
+use std::sync::mpsc::Receiver;
 
 use tokio::{
     sync::mpsc::UnboundedSender,
-    sync::mpsc::UnboundedReceiver
+    sync::mpsc::UnboundedReceiver,
   };
+
+use tokio_util::sync::CancellationToken;
 
 use crate::action::Action;
 
@@ -15,22 +18,24 @@ use tokio::io::AsyncReadExt;
 use std::process::{Command, Stdio, ChildStdout};
 use std::io::Read;
 
-// pass another receiver for the cancellation token?
-pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>) -> Result<()> {
-    // get file
-    
+// pass another receiver for the cancellation token? // _cancellation_token: CancellationToken)
+pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>, rx: Receiver<Result<Event>>) -> Result<()> {
+  let mut pos = std::fs::metadata(path)?.len();
+  let mut f = std::fs::File::open(path)?;
+/*     // get file
     let mut pos = std::fs::metadata(path)?.len();
     // get pos to end of file
     let mut f = std::fs::File::open(path)?;
     
-
     // set up watcher
     let (tx, rx) = std::sync::mpsc::channel();
-    let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
-    watcher.watch(path.as_ref(), RecursiveMode::NonRecursive)?;
+    let mut watcher: notify::INotifyWatcher = RecommendedWatcher::new(tx, Config::default())?;
+    watcher.watch(path.as_ref(), RecursiveMode::NonRecursive)?; */
+
 
     // watch
     for res in rx {
+
         match res {
             Ok(_event) => {
                 // ignore any event that didn't change the pos
@@ -69,7 +74,7 @@ pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>) -> Res
                 //println!("> {}", addedlines);
                 _event_tx.send(Action::IONotify(addedlines)).unwrap();
             }
-            Err(error) => println!("{error:?}"),
+            Err(error) => { println!("{error:?}")},
         }
     }
 

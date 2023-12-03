@@ -6,6 +6,7 @@ use futures::{TryFutureExt, FutureExt};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
+use tokio_util::sync::CancellationToken;
 
 
 use super::{Component, Frame};
@@ -156,6 +157,7 @@ pub struct Home<'a> {
   startup_complete:bool,
   
   last_mode: Mode,
+
 
 }
 
@@ -460,21 +462,8 @@ impl Component for Home<'_> {
             self.available_actions.unselect();
             Action::EnterNormal 
           },
-          KeyCode::Down => {
-            //println!("Arrow Down");
-
-            self.available_actions.next(); 
-
-            //Action::Render
-            Action::Blank
-          },
-          KeyCode::Up => {
-
-            self.available_actions.previous();
-
-            //Action::Render
-            Action::Blank
-          },
+          KeyCode::Down => {Action::ActionsNext},
+          KeyCode::Up => {Action::ActionsPrevious},
           KeyCode::Right => {
             let action_idx = self.available_actions.state.selected().unwrap();
             match self.available_actions.items[action_idx].0 {
@@ -587,64 +576,76 @@ impl Component for Home<'_> {
 
       // List Actions
       // -- LOG LIST -- iostreamed
-      Action::LogsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsNext);},
+      Action::LogsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsNext);}, // deprec
       Action::LogsNext => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.next();}},
       Action::LogsSchedulePrevious => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsPrevious);}, // {list_actions::schedule_previous_loglist(self.command_tx.clone().unwrap());},
       Action::LogsPrevious => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.previous();}},
-      Action::LogsScheduleFirst => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsFirst);},
+      Action::LogsScheduleFirst => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsFirst);}, // deprec
       Action::LogsFirst => {  self.stored_styled_iostreamed.state.select(Some(0)) },
-      Action::LogsScheduleLast => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsLast);},
+      Action::LogsScheduleLast => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsLast);}, // deprec
       Action::LogsLast => {  let idx = Some(self.stored_styled_iostreamed.items.len() - 1);
         self.stored_styled_iostreamed.state.select(idx); },
       // -- IP LIST -- iplist
-      Action::IPsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::IPsNext);},
+      Action::IPsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::IPsNext);}, // deprec
       Action::IPsNext => {            
         if self.iplist.items.len() > 0 {
           self.iplist.next();
           let sel_idx = self.iplist.state.selected().unwrap();
           self.iplist.items[sel_idx].pointdata.refresh();
+          self.selected_ip =  self.iplist.items[sel_idx].IP.ip.clone();
         }
       },
-      Action::IPsSchedulePrevious => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::IPsPrevious);},
+      Action::IPsSchedulePrevious => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::IPsPrevious);}, // deprec
       Action::IPsPrevious => {            
         if self.iplist.items.len() > 0 {
           self.iplist.previous();
           let sel_idx = self.iplist.state.selected().unwrap();
           self.iplist.items[sel_idx].pointdata.refresh();
+          self.selected_ip =  self.iplist.items[sel_idx].IP.ip.clone();
         }
       },
-
-
+      // ACTION LIST self.available_action
+      Action::ActionsNext => {self.available_actions.next();},
+      Action::ActionsPrevious => {self.available_actions.previous();},
+      Action::ActionsExecute => {
+        let action_idx = self.available_actions.state.selected().unwrap();
+        match self.available_actions.items[action_idx].0 {
+          "Ban" => {self.command_tx.clone().unwrap().send(Action::Ban)?;},
+          "monitor-fail2ban" => {
+            // check if is active
+            if self.f2brunning {
+              self.available_actions.items[action_idx].1 = String::from("inactive");
+              self.command_tx.clone().unwrap().send(Action::StopF2BWatcher)?;
+            } else {
+              self.available_actions.items[action_idx].1 = String::from("active");
+              self.f2brunning = true;
+              self.command_tx.clone().unwrap().send(Action::StartF2BWatcher)?;                          
+            }
+          },
+          "monitor-journalctl" => {
+            // check if is active
+            if self.jctlrunning{
+              // switch to inactive
+              self.available_actions.items[action_idx].1 = String::from("inactive");
+              self.command_tx.clone().unwrap().send(Action::StopJCtlWatcher)?;           
+            }
+            else{
+              // switch to active
+              self.available_actions.items[action_idx].1 = String::from("active");
+              self.jctlrunning = true;
+              self.command_tx.clone().unwrap().send(Action::StartJCtlWatcher)?;            
+            }},
+            _ => {},
+          }},
 
 
       Action::StoppedJCtlWatcher => {self.jctlrunning = false;},
-      Action::IONotify(x) => {
-
-        self.elapsed_notify += 1;
-       
-
-        //return Ok(Some(Action::GetGeo));
-        //self.command_tx.clone().unwrap().send(Action::GetGeo);
-        
-      },
+      Action::IONotify(x) => {self.elapsed_notify += 1;},
       Action::GotGeo(x,y) => {
 
         self.style_incoming_message(y.clone());
 
         let cip = x.ip.clone();
-        //let city = x.city;
-        //let country = x.country;
-        //let country_code = x.country_code;
-        //let isp = x.isp;
-        //let region_name = x.region_name;
-        //self.time_last = Some(tokio::time::Instant::now());
-        //let geolat = x.lat.clone();
-        //let geolon = x.lon.clone();
-
-
-
-        // : Vec<((f64, f64), (f64, f64))>,
-        
 
         let cipvec = self.iplist.items.clone();
 
@@ -685,6 +686,8 @@ impl Component for Home<'_> {
             let item = &self.iplist.items[i];
             if item.IP.ip == cip {
               self.iplist.state.select(Some(i));
+              self.iplist.items[i].pointdata.refresh();
+              self.selected_ip = cip;
               break;
             }
           }
@@ -869,18 +872,7 @@ impl Component for Home<'_> {
             ListItem::new(line)
           })
           .collect();
-  
-        
-  
-  /*       let iolines: Vec<ListItem> = self
-          .iostreamed
-          .items // change stateful list to simple vector CHANGED
-          .iter()
-          .map(|i| {
-            let stringo = format!("\033[92m{}\x1b[0m",i.0.as_str());
-            ListItem::new(Line::from(i.0.as_str())).style(Style::default().fg(Color::White))
-          })
-          .collect(); */
+
         let mut ioactive: u8 = 0;
         if self.available_actions.items[2].1 == "active" || self.available_actions.items[3].1 == "active" {
           if self.available_actions.items[2].1 == "active" && self.available_actions.items[3].1 == "active" {
@@ -897,10 +889,6 @@ impl Component for Home<'_> {
             match ioactive { 0 => {Style::default().fg(self.apptheme.colors.accent_wred)}, 1 => {Style::default().fg(self.apptheme.colors.accent_lpink)}, 2 => {Style::default().fg(self.apptheme.colors.accent_blue)} _ => {Style::default().fg(self.apptheme.colors.accent_wred)}}),
           Span::styled(" ] ", Style::default().fg(Color::White)),
         ]);
-  
-        // list
-        // right_layout[1]
-            
   
         // Create a List from all list items and highlight the currently selected one
         let iolist = List::new( iolines) //self.styledio.clone()

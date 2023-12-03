@@ -1,6 +1,7 @@
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use futures::channel::mpsc::UnboundedSender;
+use notify::{INotifyWatcher, RecommendedWatcher, Watcher};
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -9,6 +10,7 @@ use tokio::process::Command;
 
 use rusqlite::{Connection, Result as ConnectionResult};
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
 
 
@@ -42,6 +44,11 @@ pub struct App {
   f2bw_handle: Option<JoinHandle<()>>,
   jctl_handle: Option<JoinHandle<()>>,
   dbconn: Option<Connection>,
+
+  
+  f2b_cancellation_token: CancellationToken,
+  f2b_watcher: Option<INotifyWatcher>,
+  jctl_cancellation_token: CancellationToken,
 }
 
 impl App {
@@ -65,7 +72,10 @@ impl App {
       f2bw_handle: Option::None,
       jctl_handle: Option::None,
       dbconn: Option::None,
-      
+      f2b_cancellation_token: CancellationToken::default(),
+      f2b_watcher: Option::None,
+      jctl_cancellation_token: CancellationToken::default(),
+
     })
   }
 
@@ -190,68 +200,7 @@ impl App {
           Action::StartupConnect => {
              
           }
-/*           Action::IONotify(ref x) => {
 
-
-            let re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
-            let results: Vec<&str> = re
-              .captures_iter(x)
-              .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
-              .collect();
-            let cip: &str;
-
-            if !results.is_empty() {
-              cip = results[0];
-              // string contained an IPv4
-              let mut maybe_data: Geodata= Geodata::default();
-              let mut is_in_list: bool = false;
-
-              for stored_dat in self.stored_geo.clone() {
-                if cip == stored_dat.ip {
-                  is_in_list = true;
-                  maybe_data = stored_dat;
-                  break
-                }
-
-              }
-
-              if !is_in_list {
-                self.last_ip = String::from(cip);
-                let geodat = geofetcher::fetch_geolocation(cip).await.unwrap_or(serde_json::Value::default());
-  
-                let geoip = String::from(geodat.get("query").unwrap().as_str().unwrap());
-                let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string();
-                let geolon = geodat.get("lon").unwrap().as_number().unwrap().to_string();
-                let geoisp = String::from(geodat.get("isp").unwrap().as_str().unwrap());
-    
-                let geocountry = String::from(geodat.get("country").unwrap().as_str().unwrap());
-                let geocity = String::from(geodat.get("city").unwrap().as_str().unwrap());
-                let geocountrycode = String::from(geodat.get("countryCode").unwrap().as_str().unwrap());
-                let georegionname = String::from(geodat.get("regionName").unwrap().as_str().unwrap());
-    
-    
-                let mut geodata = gen_structs::Geodata::new();
-                geodata.ip = geoip;
-                geodata.lat = geolat;
-                geodata.lon = geolon;
-                geodata.isp = geoisp;
-    
-                geodata.country = geocountry;
-                geodata.country_code = geocountrycode;
-                geodata.city = geocity;
-                geodata.region_name = georegionname;
-    
-                self.stored_geo.push(geodata.clone());
-
-                action_tx.send(Action::GotGeo(geodata))?;
-              } else {
-                // data is stored
-                action_tx.send(Action::GotGeo(maybe_data))?;  
-              }
-
-            }
-
-          }, */
           Action::BanIP(ref x) => {
             
             let response = Command::new("echo")
@@ -268,14 +217,45 @@ impl App {
             todo!();
           },
           Action::StartF2BWatcher => {
-            if self.f2bw_handle.is_none() {
               // start the fail2ban watcher
               let action_tx2 = action_tx.clone();
               let action_tx3 = action_tx.clone();
 
+              self.f2b_cancellation_token.cancel();
+              tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // make sure we're wound down
+              let token = CancellationToken::new();
+
+              
+              let _f2b_cancellation_token = token.child_token();
+              self.f2b_cancellation_token = token;
+              let path = String::from("/var/log/fail2ban.log"); 
+
+              
+              // set up watcher
+              let (_tx, _rx) = std::sync::mpsc::channel();
+              let mut watcher: notify::INotifyWatcher = notify::RecommendedWatcher::new(_tx, notify::Config::default())?;
+              watcher.watch(path.as_ref(), notify::RecursiveMode::NonRecursive)?;
+
+
               let filewatcher = tokio::spawn(async move  {
-                
-                  let path = String::from("/var/log/fail2ban.log"); // easy test "/home/projects/ratui/text.txt" // /var/log/fail2ban.log
+                let _res = tasks::notify_change(&path, action_tx2, _rx);
+                  tokio::select! {
+                    _ = _f2b_cancellation_token.cancelled() => {
+                      drop(watcher);
+                      //_res.abort();
+                      todo!("Got dropped, so all should be fine");
+                      //return;
+                    }
+                    _ = _res => {
+
+                      todo!("Notify Change ended before it was cancelled, should not happen")
+                    }
+                  }
+
+                  //let _resp = tasks::notify_change(&path, action_tx2, _rx).await.unwrap_or_else(|err| {
+                  //  action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
+                  //});
+                  //let path = String::from("/var/log/fail2ban.log"); // easy test "/home/projects/ratui/text.txt" // /var/log/fail2ban.log
                   //println!("now running on a worker thread");
 
                   // bog standard polling file reader after
@@ -283,18 +263,26 @@ impl App {
                   //let _resp = tasks::follow_file(&path, action_tx2.clone()).await;
 
                   // Notify interface CPU higher but no polling shit and more stuff handled thanks
-                  let _resp = tasks::notify_change(&path, action_tx2).await.unwrap_or_else(|err| {
-                    action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
-                  });
+                  //let _resp = tasks::notify_change(&path, action_tx2).await.unwrap_or_else(|err| {
+                  //  action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
+                  //});
                 });
-              self.f2bw_handle = Option::Some(filewatcher);
+
+            },
+
+          Action::StopF2BWatcher => {
+            self.f2b_cancellation_token.cancel();
+
+            if self.f2b_cancellation_token.is_cancelled() {
+              //todo!("Implement Action::StoppedF2BWatcher to inform Home")
+            } else {
+              std::thread::sleep(std::time::Duration::from_millis(10));
+              action_tx.clone().send(Action::StopF2BWatcher).unwrap();
             }
 
-
-          },
-          Action::StopF2BWatcher => {
-            if let Some(handle) = self.f2bw_handle.take()  {
+ /*            if let Some(handle) = self.f2bw_handle.take()  {
               // should be more graceful
+              
               handle.abort();
 
               let mut counter = 0;
@@ -311,7 +299,7 @@ impl App {
               }
 
 
-            }
+            } */
 
           },
           Action::StartJCtlWatcher => {
