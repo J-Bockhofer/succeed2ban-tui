@@ -450,7 +450,34 @@ impl Component for Startup <'_> {
 
 
         //self.stored_geo.push(x.clone()); 
-      }
+      },
+      Action::SubmitQuery(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        let ip = schema::select_ip(conn, x.as_str()).unwrap_or_default().unwrap_or_default();
+
+        let tx = self.action_tx.clone().unwrap();
+
+        let opmsgs = schema::select_message_by_ip(conn, x.as_str()).unwrap();
+        let mut actmsgs: Vec<schema::Message> = vec![];
+
+        for opmsg in opmsgs {
+          let msg = opmsg.unwrap_or(schema::Message::default());
+          if msg != schema::Message::default() {actmsgs.push(msg);}
+        }
+
+        if ip == schema::IP::default() {
+          // send back query not found
+          tx.send(Action::QueryNotFound(x)).expect("QueryNotFound failed to send!");
+        } else {
+          // spawn thread to send debounced messages
+          tokio::spawn(async move{
+            for msg in actmsgs {
+              tx.send(Action::GotGeo(ip.clone(), msg.text)).expect("GotGeo failed to send on query!"); 
+              tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;}
+              // inefficient but else but require me to set up a duplicate receiver or refactor receive function
+          });
+        }        
+      },
       _ => (),
     }
     Ok(None)

@@ -51,13 +51,19 @@ pub enum Action {
   ActionsSchedulePrevious,
   ActionsNext,
   ActionsPrevious,
-  ActionsExecute,
   
+  // Query actions
+  EnterQuery,
+  ExitQuery,
+  SubmitQuery(String),
+  InvalidQuery,
+  QueryNotFound(String),
 
-
+  // Core
   IONotify(String),
   //FetchGeo(gen_structs::Geodata),
 
+  // second string is the line,
   GotGeo(schema::IP, String),
   Ban,
   BanIP(String),

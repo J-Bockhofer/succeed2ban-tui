@@ -16,6 +16,7 @@ use crate::{
   geofetcher, gen_structs::StatefulList,
   themes, animations, migrations::schema,
   action_handlers::list_actions,
+  animations::Animation,
 };
 
 use tui_input::{backend::crossterm::EventHandler, Input};
@@ -95,6 +96,7 @@ pub enum Mode {
   Normal,
   TakeAction,
   Processing,
+  Query,
 }
 
 
@@ -106,12 +108,21 @@ pub enum DrawMode {
   All,
 }
 
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+pub enum DisplayMode {
+  #[default]
+  Normal,
+  Help,
+  Query,
+  Stats,
+}
+
 
 #[derive(Default)]
 pub struct Home<'a> {
   command_tx: Option<UnboundedSender<Action>>,
   config: Config,
-  items: StatefulList<(&'a str, usize)>,
+  //items: StatefulList<(&'a str, usize)>,
   available_actions: StatefulList<(&'a str, String)>,
   //iostreamed: StatefulList<(String, usize)>, // do i need a tuple here? // CHANGED
   //iostreamed: Vec<(String, usize)>,
@@ -121,6 +132,7 @@ pub struct Home<'a> {
   pub input: Input,
   pub mode: Mode,
   pub drawmode: DrawMode,
+  pub displaymode: DisplayMode,
   elapsed_rticks: usize,
   elapsed_frames: f64,
 
@@ -158,6 +170,9 @@ pub struct Home<'a> {
   
   last_mode: Mode,
 
+  querystring: String,
+  queryerror: String,
+  anim_querycursor: Animation<&'a str>,
 
 }
 
@@ -169,21 +184,15 @@ impl<'a> Home<'a> {
   pub fn set_items(mut self) -> Self {
     self.iplist = StatefulList::with_items(vec![
     ]);  
-    self.items = StatefulList::with_items(vec![
-      ("Item0", 1),
-      ("Item1", 2),
-      ("Item2", 1),
-      ("Item3", 1),
-      ("Item4", 1),
-      ("Item5", 2),
-      ("Item6", 1),
-      ("Item7", 1),
-    ]);   
     self.available_actions = StatefulList::with_items(vec![
       ("Ban", String::from("some ip")),
       ("Unban", String::from("some ip")),
       ("monitor-journalctl", String::from("inactive")),
       ("monitor-fail2ban", String::from("inactive")),
+      ("Stats", String::from("T | t")),
+      ("Query", String::from("Q | q")),
+      ("Help", String::from("W | w")),
+      ("Exit", String::from("Esc | Ctrl+C")),
     ]);
     self.last_lat = 53.0416;
     self.last_lon = 8.9433;
@@ -196,7 +205,11 @@ impl<'a> Home<'a> {
     self.f2brunning = false;
     self.startup_complete = false;
     self.drawmode = DrawMode::Decaying;
-  
+    self.displaymode = DisplayMode::Normal;
+
+    self.anim_querycursor = Animation::with_items(vec![""," "]);
+    self.queryerror = String::from("Enter IP");
+
     self
   }
 
@@ -238,19 +251,11 @@ impl<'a> Home<'a> {
         .block(Block::default().borders(Borders::ALL).title("World").bg(self.apptheme.colors.default_background))
         .marker(Marker::Braille)
         .paint(move |ctx| {
-/*             ctx.draw(&canvas::Rectangle {
-              x:  w / 2.,
-              y: h / 2.,
-              width: w,
-              height: h,
-              color:self.apptheme.colors.default_background,
-            }); */
-
+            // draw map
             ctx.draw(&canvas::Map {
                 color: self.apptheme.colors.default_map_color,
                 resolution: canvas::MapResolution::High,
             });
-
 
             for pointdata in &visible_points {
 
@@ -262,19 +267,19 @@ impl<'a> Home<'a> {
               ctx.draw(&canvas::Line {
                 x1: self.home_lon,
                 y1: self.home_lat,
-                x2: x2,
-                y2: y2,
+                x2,
+                y2,
                 color:self.apptheme.colors.accent_dblue,
               }); 
-
+              // draw animated line
               ctx.draw(&canvas::Line {
                 x1: x2 + dir.0 * map_range((0.,7.), (0.,1.), self.elapsed_frames),
                 y1: y2 + dir.1 * map_range((0.,7.), (0.,1.), self.elapsed_frames),
-                x2: x2,
-                y2: y2,
+                x2,
+                y2,
                 color: self.apptheme.colors.accent_blue,
               });
-            
+              // draw animated circle
               ctx.draw(&canvas::Circle {
                 x: x2, // lon
                 y: y2, // lat
@@ -283,11 +288,11 @@ impl<'a> Home<'a> {
               });
 
             }
-
+            // if nothing is in ip list ie. on startup show a circle around the home coordinates
             if self.iplist.items.len() == 0 {
               ctx.draw(&canvas::Circle {
-                x: self.last_lon, // lon
-                y: self.last_lat, // lat
+                x: self.home_lon, // lon
+                y: self.home_lat, // lat
                 radius: self.elapsed_frames,
                 color: self.apptheme.colors.accent_orange,
               });
@@ -302,7 +307,151 @@ impl<'a> Home<'a> {
         .y_bounds([-90.0, 90.0])
   }
 
+  fn add_to_querystring(&mut self, ch: char) {
+    self.querystring.push(ch);
+  }
 
+  fn rm_last_char_from_querystring(&mut self) {
+    self.querystring.pop();
+  }
+
+  fn submit_query(&mut self) -> bool {
+    // check if valid IP else return false
+    if self.apptheme.ipregex.is_match(&self.querystring) {
+      self.command_tx.clone().unwrap().send(Action::SubmitQuery(self.querystring.clone())).unwrap_or_else(|err|{
+        println!("Error submitting query from Home {}", err);
+      });
+      return true;
+    }
+    false
+  }
+
+  fn centered_rect(&self, r: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let popup_layout = Layout::default()
+      .direction(Direction::Vertical)
+      .constraints([
+        Constraint::Percentage((100 - percent_y) / 2),
+        Constraint::Percentage(percent_y),
+        Constraint::Percentage((100 - percent_y) / 2),
+      ])
+      .split(r);
+  
+    Layout::default()
+      .direction(Direction::Horizontal)
+      .constraints([
+        Constraint::Percentage((100 - percent_x) / 2),
+        Constraint::Percentage(percent_x),
+        Constraint::Percentage((100 - percent_x) / 2),
+      ])
+      .split(popup_layout[1])[1]
+  }
+
+  fn create_help_popup(&self) -> impl Widget + '_ {
+    // make a layout in center of the screen, outside this function, pass area to this  
+    let active_drawmode = match self.drawmode {
+      DrawMode::All => {"All   "},
+      DrawMode::Decaying => {"Decay "},
+      DrawMode::Sticky => {"Sticky"},
+    };
+
+    // make text
+    let mut helptext: Vec<Line> = vec![];
+    let mut hheader =   Line::from(format!("---           HOTKEYS       ---                                                                 -"));
+    hheader.patch_style(self.apptheme.fail2ban_bg);
+    helptext.push(hheader);
+    helptext.push(                Line::from(format!("Key:          Name          Info")));
+    let mut hheader =   Line::from(format!("---           General       ---                                                                 -"));
+    hheader.patch_style(self.apptheme.fail2ban_bg);
+    helptext.push(hheader);    
+    helptext.push(                Line::from(format!("Arrowkeys:    Select        Select item in IPs or Actions dependent on mode")));
+    helptext.push(                Line::from(format!("Tab:          Mode          Switch Mode between IP-List & Actions")));
+    helptext.push(                Line::from(format!("W|w:          Help          Toggle help")));
+    helptext.push(                Line::from(format!("Q|q:          Query         Toggle query input for IP data from db")));
+    helptext.push(                Line::from(format!("Enter:        Execute       Context dependent selection or execution")));
+    let mut hheader =   Line::from(format!("---           Drawmode      ---                                           {}                -", active_drawmode)); // for more spaces bc inserted string has six characters
+    hheader.patch_style(self.apptheme.fail2ban_bg);
+    helptext.push(hheader);
+    helptext.push(                Line::from(format!("A|a:          All           Draws all connections all the time")));
+    helptext.push(                Line::from(format!("S|s:          Sticky        Draws only the selection connection")));
+    helptext.push(                Line::from(format!("D|d:          Decay         Draws each connection for 10 seconds")));
+    let mut ioheader =  Line::from(format!("---           I/O Stream    ---                                                                 -"));
+    ioheader.patch_style(self.apptheme.fail2ban_bg);
+    helptext.push(ioheader);
+    helptext.push(                Line::from(format!("H|h:          First         Select oldest line in I/O Streamed")));
+    helptext.push(                Line::from(format!("J|j:          Previous      Select previous line in I/O Streamed")));
+    helptext.push(                Line::from(format!("K|k:          Next          Select next line in I/O Streamed")));
+    helptext.push(                Line::from(format!("L|l:          Last          Select latest line in I/O Streamed")));
+    helptext.push(                Line::from(format!("N|n:          Unselect      Reset line selection in I/O Streamed")));
+    let mut hheader =   Line::from(format!("---           DEBUG         ---                                                                 -"));
+    hheader.patch_style(self.apptheme.fail2ban_bg);
+    helptext.push(hheader);
+    helptext.push(Line::from(format!("Received I/O:   {}", self.infotext.clone())));
+    helptext.push(Line::from(format!("numLinesLast:   {}", self.elapsed_notify.to_string())));
+    helptext.push(Line::from(format!("dbg-msg:        {}", self.debug_me)));
+
+    let infoblock = Paragraph::new(helptext)
+    .set_style(Style::default())
+    .block(Block::default()
+    .bg(self.apptheme.colors.lblack)
+    .borders(Borders::ALL)
+    .title("Help"));
+    infoblock
+
+  }
+
+  fn create_query_popup(&self)-> impl Widget + '_ {
+
+    let querycursor = self.anim_querycursor.state.selected().unwrap();
+    let querycursor = self.anim_querycursor.keyframes[querycursor];
+
+    let mut querytext: Vec<Line> = vec![];
+    let queryline =   Line::from(vec![
+      Span::styled(format!("Query: {}", self.querystring), self.apptheme.selected_ip_bg) , 
+      Span::styled(querycursor, self.apptheme.fail2ban_bg)
+      ]);
+    //queryline.patch_style(self.apptheme.selected_ip_bg);
+    querytext.push(queryline);
+
+    let mut queryerror =   Line::from(format!("Status: {}", self.queryerror));
+    queryerror.patch_style(self.apptheme.default_background);
+    querytext.push(queryerror);
+
+    let querybox = Paragraph::new(querytext)
+    .set_style(Style::default())
+    .block(Block::default()
+    .bg(self.apptheme.colors.lblack)
+    .borders(Borders::ALL)
+    .title("Query"));
+    querybox
+
+  }
+
+  fn toggle_f2bwatcher(&mut self, action_idx: usize) -> Action {
+    // check if is active
+    if self.f2brunning {
+      self.available_actions.items[action_idx].1 = String::from("inactive");
+      Action::StopF2BWatcher
+    } else {
+      self.available_actions.items[action_idx].1 = String::from("active");
+      self.f2brunning = true;
+      Action::StartF2BWatcher                 
+    }
+  }
+
+  fn toggle_jctlwatcher(&mut self, action_idx: usize) -> Action {
+      // check if is active
+      if self.jctlrunning{
+        // switch to inactive
+        self.available_actions.items[action_idx].1 = String::from("inactive");
+        Action::StopJCtlWatcher
+      }
+      else{
+        // switch to active
+        self.available_actions.items[action_idx].1 = String::from("active");
+        self.jctlrunning = true;
+        Action::StartJCtlWatcher  
+      }
+  }
 
   pub fn style_incoming_message(&mut self, msg: String) {
     let mut dbg: String;
@@ -404,54 +553,50 @@ impl Component for Home<'_> {
 
   fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
     self.last_events.push(key.clone());
+    // Do matching of general keychars first to deduplicate
+    match key.code {
+      KeyCode::Esc => return Ok(Some(Action::Quit)),
+      KeyCode::Char(keychar) => {
+        match keychar {
+          // DrawMode switching
+          'A'|'a' => {self.drawmode = DrawMode::All; return Ok(Some(Action::Blank))},
+          'S'|'s' => {self.drawmode = DrawMode::Sticky; return Ok(Some(Action::Blank))},
+          'D'|'d' => {self.drawmode = DrawMode::Decaying; return Ok(Some(Action::Blank))},
+          // IO-ListNavigation
+          'J'|'j' => {self.last_mode = self.mode; return Ok(Some(Action::LogsPrevious))}, // up // LogsSchedulePrevious Schedule locks me out with resetting modes
+          'H'|'h' => {self.last_mode = self.mode; return Ok(Some(Action::LogsFirst))}, // top
+          'K'|'k' => {self.last_mode = self.mode; return Ok(Some(Action::LogsNext))},  // down
+          'L'|'l' => {self.last_mode = self.mode; return Ok(Some(Action::LogsLast))}, // bottom
+          'N'|'n' => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))}, // unselect
+          // IP-ListNavigation
+          // -- ArrowKeys
+          'W'|'w' => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} return Ok(Some(Action::Blank))},
+          'Q'|'q' => {if self.displaymode == DisplayMode::Query {return Ok(Some(Action::ExitQuery))} else {return Ok(Some(Action::EnterQuery))} },
+          _ => {}
+        }
+      },
+      _ => {},
+    };
+
     let action = match self.mode {
       Mode::Processing => return Ok(None),
       Mode::Normal => {
         match key.code {
-          KeyCode::Esc => Action::Quit,
-          KeyCode::Char(keychar) => {
-            match keychar {
-              // DrawMode switching
-              'A'|'a' => {self.drawmode = DrawMode::All; Action::Blank},
-              'S'|'s' => {self.drawmode = DrawMode::Sticky; Action::Blank},
-              'D'|'d' => {self.drawmode = DrawMode::Decaying; Action::Blank},
-              // IO-ListNavigation
-              'J'|'j' => {self.last_mode = self.mode; Action::LogsPrevious}, // up // LogsSchedulePrevious Schedule locks me out with resetting modes
-              'H'|'h' => {self.last_mode = self.mode; Action::LogsFirst}, // top
-              'K'|'k' => {self.last_mode = self.mode; Action::LogsNext},  // down
-              'L'|'l' => {self.last_mode = self.mode; Action::LogsLast}, // bottom
-              'N'|'n' => {self.stored_styled_iostreamed.unselect(); Action::Blank}, // unselect
-              // IP-ListNavigation
-              // -- ArrowKeys
-
-
-              _ => {//Action::Render
-                Action::Blank}
-            }
-          },
           KeyCode::Down => {Action::IPsNext},
           KeyCode::Up => {Action::IPsPrevious},
-          KeyCode::Right => {Action::EnterTakeAction},
           KeyCode::Left => {
             self.iplist.unselect();
             self.selected_ip = "".to_string();
             //Action::Render
             Action::Blank
           },
-          KeyCode::Tab => {
-            Action::EnterTakeAction
-            
-          },
-          KeyCode::Enter => {
-            Action::EnterTakeAction
-          },
+          KeyCode::Right | KeyCode::Tab | KeyCode::Enter => {Action::EnterTakeAction},
           _ => {
             self.input.handle_event(&crossterm::event::Event::Key(key));
             //Action::Render
             Action::Blank
           },
         }}
-
         //////////////
       Mode::TakeAction => {
         match key.code {
@@ -464,99 +609,61 @@ impl Component for Home<'_> {
           },
           KeyCode::Down => {Action::ActionsNext},
           KeyCode::Up => {Action::ActionsPrevious},
-          KeyCode::Right => {
+          KeyCode::Right | KeyCode::Enter => {
             let action_idx = self.available_actions.state.selected().unwrap();
             match self.available_actions.items[action_idx].0 {
               "Ban" => {Action::Ban},
-              "monitor-fail2ban" => {
-                // check if is active
-                if self.f2brunning {
-                  self.available_actions.items[action_idx].1 = String::from("inactive");
-                  Action::StopF2BWatcher
-                } else {
-                  self.available_actions.items[action_idx].1 = String::from("active");
-                  self.f2brunning = true;
-                  Action::StartF2BWatcher                 
-                }
-
-              },
-              "monitor-journalctl" => {
-                // check if is active
-                if self.jctlrunning{
-                  // switch to inactive
-                  self.available_actions.items[action_idx].1 = String::from("inactive");
-                  Action::StopJCtlWatcher
-                }
-                else{
-                  // switch to active
-                  self.available_actions.items[action_idx].1 = String::from("active");
-                  self.jctlrunning = true;
-                  Action::StartJCtlWatcher  
-                }
-              },
-              _ => {//Action::Render
-                Action::Blank},
+              "monitor-fail2ban" => {self.toggle_f2bwatcher(action_idx)},
+              "monitor-journalctl" => {self.toggle_jctlwatcher(action_idx)},
+              "Stats" => {Action::Blank}, // TODO
+              "Query" => {if self.displaymode == DisplayMode::Query {Action::ExitQuery} else {Action::EnterQuery}},
+              "Help" => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} Action::Blank},
+              "Exit" => {Action::Quit},
+              _ => {Action::Blank},
             }
           }, 
-          KeyCode::Enter => {
-            let action_idx = self.available_actions.state.selected().unwrap();
-            match self.available_actions.items[action_idx].0 {
-              "Ban" => {Action::Ban},
-              "monitor-fail2ban" => {
-                // check if is active
-                if self.available_actions.items[action_idx].1.as_str() == "active"{
-                  // switch to inactive
-                  self.available_actions.items[action_idx].1 = String::from("inactive");
-                  Action::StopF2BWatcher
-                }
-                else{
-                  // switch to active
-                  self.available_actions.items[action_idx].1 = String::from("active");
-                  Action::StartF2BWatcher
-                }
-              },
-              "monitor-journalctl" => {
-                // check if is active
-                if self.available_actions.items[action_idx].1.as_str() == "active"{
-                  // switch to inactive
-                  self.available_actions.items[action_idx].1 = String::from("inactive");
-                  Action::StopJCtlWatcher
-                }
-                else{
-                  // switch to active
-                  self.available_actions.items[action_idx].1 = String::from("active");
-                  Action::StartJCtlWatcher
-                }
-
-              },
-              _ => {//Action::Render
-                Action::Blank},
-            }
-          },
-          KeyCode::Char(keychar) => {
-            match keychar {
-              // DrawMode switching
-              'A'|'a' => {self.drawmode = DrawMode::All; Action::Blank},
-              'S'|'s' => {self.drawmode = DrawMode::Sticky; Action::Blank},
-              'D'|'d' => {self.drawmode = DrawMode::Decaying; Action::Blank},
-              // IO-ListNavigation
-              'J'|'j' => {Action::LogsSchedulePrevious}, // up
-              'H'|'h' => {Action::LogsScheduleLast}, // top
-              'K'|'k' => {Action::LogsScheduleNext},  // down
-              'L'|'l' => {Action::LogsScheduleFirst}, // bottom
-              'N'|'n' => {self.stored_styled_iostreamed.unselect(); Action::Blank}, // unselect
-
-
-              _ => {//Action::Render
-                Action::Blank}
-            }
-          },       
           _ => {
             self.input.handle_event(&crossterm::event::Event::Key(key));
             //Action::Render
             Action::Blank
           },
         }
+      },
+      Mode::Query => {
+        match key.code {
+          KeyCode::Tab => {self.displaymode = DisplayMode::Normal; 
+          match self.last_mode {
+            Mode::Normal => {Action::EnterNormal},
+            Mode::TakeAction => {Action::EnterTakeAction},
+            Mode::Processing => {Action::EnterNormal},
+            _ => {todo!("This shouldn't happen!")},
+          }}
+          KeyCode::Char(keychar) => {
+            match keychar {
+              // Digits & Dot
+              '1' => {self.add_to_querystring('1'); Action::Render}, // Action render makes it feel way more responsive
+              '2' => {self.add_to_querystring('2'); Action::Render},
+              '3' => {self.add_to_querystring('3'); Action::Render},
+              '4' => {self.add_to_querystring('4'); Action::Render}, 
+              '5' => {self.add_to_querystring('5'); Action::Render}, 
+              '6' => {self.add_to_querystring('6'); Action::Render}, 
+              '7' => {self.add_to_querystring('7'); Action::Render}, 
+              '8' => {self.add_to_querystring('8'); Action::Render}, 
+              '9' => {self.add_to_querystring('9'); Action::Render},
+              '0' => {self.add_to_querystring('0'); Action::Render},
+              '.' => {self.add_to_querystring('.'); Action::Render},
+              _ => {//Action::Render
+                Action::Blank}
+            }
+          },
+          KeyCode::Backspace => {self.rm_last_char_from_querystring(); Action::Render},
+          KeyCode::Enter => {if self.submit_query() {Action::Blank} else {Action::InvalidQuery}}, // print something to the querybox, best -> mark invalid chars / num chars
+          _ => {
+            self.input.handle_event(&crossterm::event::Event::Key(key));
+            //Action::Render
+            Action::Blank
+          },
+        }      
       },
     };
     
@@ -573,7 +680,8 @@ impl Component for Home<'_> {
       Action::EnterTakeAction => {self.mode = Mode::TakeAction; self.last_mode = self.mode;},
       Action::EnterProcessing => { self.mode = Mode::Processing;}, // self.last_mode = self.mode;
       Action::ExitProcessing => {self.mode = self.last_mode;}, // TODO: Last mode, solved? No we have to look into the future to see if we want to change to same again and then forgo that
-
+      Action::EnterQuery => {self.last_mode = self.mode; self.mode = Mode::Query; self.displaymode = DisplayMode::Query;}
+      Action::ExitQuery => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
       // List Actions
       // -- LOG LIST -- iostreamed
       Action::LogsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsNext);}, // deprec
@@ -583,8 +691,12 @@ impl Component for Home<'_> {
       Action::LogsScheduleFirst => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsFirst);}, // deprec
       Action::LogsFirst => {  self.stored_styled_iostreamed.state.select(Some(0)) },
       Action::LogsScheduleLast => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsLast);}, // deprec
-      Action::LogsLast => {  let idx = Some(self.stored_styled_iostreamed.items.len() - 1);
-        self.stored_styled_iostreamed.state.select(idx); },
+      Action::LogsLast => {  
+        if self.stored_styled_iostreamed.items.len() > 0 {
+          let idx = Some(self.stored_styled_iostreamed.items.len() - 1);
+          self.stored_styled_iostreamed.state.select(idx);
+        }
+      },
       // -- IP LIST -- iplist
       Action::IPsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::IPsNext);}, // deprec
       Action::IPsNext => {            
@@ -607,40 +719,13 @@ impl Component for Home<'_> {
       // ACTION LIST self.available_action
       Action::ActionsNext => {self.available_actions.next();},
       Action::ActionsPrevious => {self.available_actions.previous();},
-      Action::ActionsExecute => {
-        let action_idx = self.available_actions.state.selected().unwrap();
-        match self.available_actions.items[action_idx].0 {
-          "Ban" => {self.command_tx.clone().unwrap().send(Action::Ban)?;},
-          "monitor-fail2ban" => {
-            // check if is active
-            if self.f2brunning {
-              self.available_actions.items[action_idx].1 = String::from("inactive");
-              self.command_tx.clone().unwrap().send(Action::StopF2BWatcher)?;
-            } else {
-              self.available_actions.items[action_idx].1 = String::from("active");
-              self.f2brunning = true;
-              self.command_tx.clone().unwrap().send(Action::StartF2BWatcher)?;                          
-            }
-          },
-          "monitor-journalctl" => {
-            // check if is active
-            if self.jctlrunning{
-              // switch to inactive
-              self.available_actions.items[action_idx].1 = String::from("inactive");
-              self.command_tx.clone().unwrap().send(Action::StopJCtlWatcher)?;           
-            }
-            else{
-              // switch to active
-              self.available_actions.items[action_idx].1 = String::from("active");
-              self.jctlrunning = true;
-              self.command_tx.clone().unwrap().send(Action::StartJCtlWatcher)?;            
-            }},
-            _ => {},
-          }},
-
-
       Action::StoppedJCtlWatcher => {self.jctlrunning = false;},
       Action::IONotify(x) => {self.elapsed_notify += 1;},
+
+      Action::InvalidQuery => {self.queryerror = String::from("Invalid Query!");},
+      Action::QueryNotFound(x) => {self.queryerror = format!("IP not found: {}", x);},
+      Action::SubmitQuery(x) => {self.querystring = String::from("") ;self.queryerror = format!("Querying IP: {}", x);},
+
       Action::GotGeo(x,y) => {
 
         self.style_incoming_message(y.clone());
@@ -925,8 +1010,41 @@ impl Component for Home<'_> {
       f.render_stateful_widget(iplist, left_layout[1], &mut self.iplist.state);
   
       f.render_stateful_widget(actionlist, left_layout[2], &mut self.available_actions.state);
+
+      // display popups/overlays
+      match self.displaymode {
+        DisplayMode::Help => {
+          let p_area = self.centered_rect(f.size(), 35, 40);
+          f.render_widget(Clear, p_area);
+          f.render_widget(self.create_help_popup(),p_area);
+          },
+        DisplayMode::Query => {
+          self.anim_querycursor.next();
+          let p_area = self.centered_rect(f.size(), 20, 7);
+          f.render_widget(Clear, p_area);
+          f.render_widget(self.create_query_popup(),p_area);
+        },
+        DisplayMode::Stats => {},
+        _ => {},
+      }
+
+/*       // last keys display
+      f.render_widget(
+        Block::default()
+          .title(
+            ratatui::widgets::block::Title::from(format!(
+              "{:?}",
+              &self.last_events.iter().map(|k| crate::config::key_event_to_string(k)).collect::<Vec<_>>()
+            ))
+            .alignment(Alignment::Right),
+          )
+          .title_style(Style::default().add_modifier(Modifier::BOLD)),
+        Rect { x: area.x + 1, y: area.height.saturating_sub(1), width: area.width.saturating_sub(2), height: 1 },
+      ); */
+
+
     } else {
-      f.render_widget(Paragraph::new("hello world"), area);
+      f.render_widget(Paragraph::new("You shouldn't see this, if you keep encountering this problem please create an issue referring to Code: E100"), area);
     }
 
 
