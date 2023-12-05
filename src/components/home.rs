@@ -15,6 +15,7 @@ use crate::{
   config::{Config, KeyBindings},
   geofetcher, gen_structs::StatefulList,
   themes, animations, migrations::schema,
+  migrations::schema::ip::IP,
   action_handlers::list_actions,
   animations::Animation,
 };
@@ -71,13 +72,13 @@ impl Default for PointData {
 #[allow(non_snake_case)]
 #[derive(Clone, Default)]
 struct IPListItem {
-  pub IP: schema::IP,
+  pub IP: IP,
   pub username: String,
   pub pointdata: PointData,
 }
 #[allow(non_snake_case)]
 impl IPListItem {
-  pub fn new(IP:schema::IP, username:String, pointdata: PointData)-> Self {
+  pub fn new(IP:IP, username:String, pointdata: PointData)-> Self {
     IPListItem { IP, username, pointdata}
   }
 }
@@ -97,6 +98,8 @@ pub enum Mode {
   TakeAction,
   Processing,
   Query,
+  ConfirmClear,
+  SetIOCapacity,
 }
 
 
@@ -115,6 +118,15 @@ pub enum DisplayMode {
   Help,
   Query,
   Stats,
+  ConfirmClear,
+  SetIOCapacity,
+}
+
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+pub enum IOMode {
+  #[default]
+  Follow, // will jump to freshly received IP
+  Static, // will stay at selected IP
 }
 
 
@@ -133,6 +145,8 @@ pub struct Home<'a> {
   pub mode: Mode,
   pub drawmode: DrawMode,
   pub displaymode: DisplayMode,
+  pub iomode: IOMode,
+
   elapsed_rticks: usize,
   elapsed_frames: f64,
 
@@ -149,6 +163,7 @@ pub struct Home<'a> {
 
 
   iplist: StatefulList<IPListItem>,
+  iplist_capacity: usize,
 
   infotext: String,
   elapsed_notify: usize,
@@ -158,6 +173,8 @@ pub struct Home<'a> {
                                                       //f2b or journal // IP
   stored_styled_iostreamed: StatefulList<(StyledLine, String, String)>,
   //stored_styled_iostreamed: StatefulList<IOListItem>, Todo ?
+  iostreamed_capacity: usize,
+  iostreamed_capacity_input: String,
 
   apptheme: themes::Theme,
 
@@ -167,12 +184,15 @@ pub struct Home<'a> {
   last_username: String,
 
   startup_complete:bool,
+  showing_stats: bool,
   
   last_mode: Mode,
 
   querystring: String,
   queryerror: String,
   anim_querycursor: Animation<&'a str>,
+
+  available_themes: themes::Themes,
 
 }
 
@@ -183,13 +203,14 @@ impl<'a> Home<'a> {
 
   pub fn set_items(mut self) -> Self {
     self.iplist = StatefulList::with_items(vec![
-    ]);  
+    ]);
+    self.iplist_capacity = 10;
     self.available_actions = StatefulList::with_items(vec![
       ("Ban", String::from("some ip")),
       ("Unban", String::from("some ip")),
       ("monitor-journalctl", String::from("inactive")),
       ("monitor-fail2ban", String::from("inactive")),
-      ("Stats", String::from("T | t")),
+      ("Stats", String::from("E | e")),
       ("Query", String::from("Q | q")),
       ("Help", String::from("W | w")),
       ("Exit", String::from("Esc | Ctrl+C")),
@@ -204,11 +225,16 @@ impl<'a> Home<'a> {
     self.jctlrunning = false;
     self.f2brunning = false;
     self.startup_complete = false;
+    self.showing_stats = false;
     self.drawmode = DrawMode::Decaying;
     self.displaymode = DisplayMode::Normal;
+    self.iomode = IOMode::Follow;
 
     self.anim_querycursor = Animation::with_items(vec![""," "]);
     self.queryerror = String::from("Enter IP");
+
+    self.iostreamed_capacity = 100;
+    self.available_themes = themes::Themes::default();
 
     self
   }
@@ -298,8 +324,6 @@ impl<'a> Home<'a> {
               });
             }
             
-
-
             //ctx.print(self.last_lon, self.last_lat, "X".red());
             ctx.print(self.home_lon, self.home_lat, Line::from(Span::styled("H", Style::default().fg(self.apptheme.colors.accent_orange))));
         })
@@ -353,6 +377,10 @@ impl<'a> Home<'a> {
       DrawMode::Decaying => {"Decay "},
       DrawMode::Sticky => {"Sticky"},
     };
+    let active_iomode = match self.iomode {
+      IOMode::Follow => {"Follow"},
+      IOMode::Static => {"Static"},
+    };
 
     // make text
     let mut helptext: Vec<Line> = vec![];
@@ -367,6 +395,8 @@ impl<'a> Home<'a> {
     helptext.push(                Line::from(format!("Tab:          Mode          Switch Mode between IP-List & Actions")));
     helptext.push(                Line::from(format!("W|w:          Help          Toggle help")));
     helptext.push(                Line::from(format!("Q|q:          Query         Toggle query input for IP data from db")));
+    helptext.push(                Line::from(format!("E|e:          Stats         Switch to Stats-Screen")));  
+    helptext.push(                Line::from(format!("C|c:          Clear         Clears IP and I/O Lists")));
     helptext.push(                Line::from(format!("Enter:        Execute       Context dependent selection or execution")));
     let mut hheader =   Line::from(format!("---           Drawmode      ---                                           {}                -", active_drawmode)); // for more spaces bc inserted string has six characters
     hheader.patch_style(self.apptheme.fail2ban_bg);
@@ -374,7 +404,7 @@ impl<'a> Home<'a> {
     helptext.push(                Line::from(format!("A|a:          All           Draws all connections all the time")));
     helptext.push(                Line::from(format!("S|s:          Sticky        Draws only the selection connection")));
     helptext.push(                Line::from(format!("D|d:          Decay         Draws each connection for 10 seconds")));
-    let mut ioheader =  Line::from(format!("---           I/O Stream    ---                                                                 -"));
+    let mut ioheader =  Line::from(format!("---           I/O Stream    ---                                 Capacity: {}                -", self.iostreamed_capacity));
     ioheader.patch_style(self.apptheme.fail2ban_bg);
     helptext.push(ioheader);
     helptext.push(                Line::from(format!("H|h:          First         Select oldest line in I/O Streamed")));
@@ -382,7 +412,13 @@ impl<'a> Home<'a> {
     helptext.push(                Line::from(format!("K|k:          Next          Select next line in I/O Streamed")));
     helptext.push(                Line::from(format!("L|l:          Last          Select latest line in I/O Streamed")));
     helptext.push(                Line::from(format!("N|n:          Unselect      Reset line selection in I/O Streamed")));
-    let mut hheader =   Line::from(format!("---           DEBUG         ---                                                                 -"));
+    helptext.push(                Line::from(format!("+|-:          Set Capacity  Input a new capacity for I/O Streamed")));
+    let mut hheader =   Line::from(format!("---           IO-Mode       ---                                           {}                -", active_iomode)); // four more spaces bc inserted string has six characters
+    hheader.patch_style(self.apptheme.fail2ban_bg);
+    helptext.push(hheader);
+    helptext.push(                Line::from(format!("F|f:          Follow        Auto-selects the last received IP")));
+    helptext.push(                Line::from(format!("G|g:          Static        Selection stays where you left it")));   
+    let mut hheader =   Line::from(format!("---           DEBUG         ---                                                                 -"));    
     hheader.patch_style(self.apptheme.fail2ban_bg);
     helptext.push(hheader);
     helptext.push(Line::from(format!("Received I/O:   {}", self.infotext.clone())));
@@ -453,6 +489,93 @@ impl<'a> Home<'a> {
       }
   }
 
+  fn clear_lists(&mut self) {
+    self.iplist.items = vec![];
+    self.stored_styled_iostreamed.items = vec![];
+  }
+
+  fn create_clearlist_popup(&self)  -> impl Widget + '_  {
+
+    let mut clearlisttext: Vec<Line> = vec![];
+    let clearlistline =   Line::from(vec![
+      Span::styled(format!("Press "), self.apptheme.default_text_style), 
+      Span::styled(format!("Y | y "), Style::default().fg(self.apptheme.colors.accent_lime)),
+      Span::styled(format!("to confirm or "), self.apptheme.default_text_style),
+      Span::styled(format!("N | n "), Style::default().fg(self.apptheme.colors.accent_orange)),
+      Span::styled(format!("to cancel."), self.apptheme.default_text_style),
+      ]);
+    //clearlistline.patch_style(self.apptheme.selected_ip_bg);
+    clearlisttext.push(clearlistline);
+
+    let clearlistbox = Paragraph::new(clearlisttext)
+    .set_style(Style::default())
+    .block(Block::default()
+    .bg(self.apptheme.colors.lblack)
+    .borders(Borders::ALL)
+    .title("Confirm to clear list"));
+    clearlistbox
+
+  }
+
+  fn set_io_capacity_to(&mut self, new_capacity:usize) {
+    self.iostreamed_capacity = new_capacity;
+  }
+
+  fn popup_set_io_capacity(&self) -> impl Widget + '_ {
+
+    let capacitycursor = self.anim_querycursor.state.selected().unwrap();
+    let capacitycursor = self.anim_querycursor.keyframes[capacitycursor];
+
+    let mut capacitytext: Vec<Line> = vec![];
+    let capacityline =   Line::from(vec![
+      Span::styled(format!("New Capacity: {}", self.iostreamed_capacity_input), self.apptheme.selected_ip_bg) , 
+      Span::styled(capacitycursor, self.apptheme.fail2ban_bg)
+      ]);
+    //capacityline.patch_style(self.apptheme.selected_ip_bg);
+    capacitytext.push(capacityline);
+
+    let capacitybox = Paragraph::new(capacitytext)
+    .set_style(Style::default())
+    .block(Block::default()
+    .bg(self.apptheme.colors.lblack)
+    .borders(Borders::ALL)
+    .title("Set I/O Stream capacity"));
+    capacitybox
+  }
+
+  fn add_to_capacitystring(&mut self, ch: char) {
+    self.iostreamed_capacity_input.push(ch);
+  }
+
+  fn rm_last_char_from_capacitystring(&mut self) {
+    self.iostreamed_capacity_input.pop();
+  }
+
+  fn submit_capacity(&mut self) -> bool {
+    // check if valid IP else return false
+    let mut new_capacity = self.iostreamed_capacity_input.clone().parse::<usize>().unwrap_or(0);
+    if new_capacity > 0 {
+      if new_capacity > 10000 {new_capacity = 10000;}
+      self.set_io_capacity_to(new_capacity);
+      self.iostreamed_capacity_input = String::from("");
+      return true;
+    }
+    false
+  }
+
+  fn select_new_theme(&mut self, theme_name: String) {
+    for themecontainer in self.available_themes.theme_collection.clone() {
+      if themecontainer.name == theme_name {
+        self.apptheme = themecontainer.theme;
+        break;
+      }
+    }
+  }
+
+
+  /// Styles the incoming lines from either journalctl or fail2ban log.
+  /// Fail2Ban may send a String that contains multiple lines which are delimited by "++++".
+  /// Styled lines (saved in self.stored_styled_iostreamed) contain colored substrings / words.
   pub fn style_incoming_message(&mut self, msg: String) {
     let mut dbg: String;
 
@@ -530,13 +653,11 @@ impl<'a> Home<'a> {
       
       //self.stored_styled_lines.push(thisline);
       self.stored_styled_iostreamed.items.push((thisline, last_io.clone(), cip.to_string()));
-      self.stored_styled_iostreamed.trim_to_length(100);
+      self.stored_styled_iostreamed.trim_to_length(self.iostreamed_capacity);
 
     }// end per line
 
   }
-
-
 
 }
 
@@ -554,127 +675,183 @@ impl Component for Home<'_> {
   fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
     self.last_events.push(key.clone());
     // Do matching of general keychars first to deduplicate
-    match key.code {
-      KeyCode::Esc => return Ok(Some(Action::Quit)),
-      KeyCode::Char(keychar) => {
-        match keychar {
-          // DrawMode switching
-          'A'|'a' => {self.drawmode = DrawMode::All; return Ok(Some(Action::Blank))},
-          'S'|'s' => {self.drawmode = DrawMode::Sticky; return Ok(Some(Action::Blank))},
-          'D'|'d' => {self.drawmode = DrawMode::Decaying; return Ok(Some(Action::Blank))},
-          // IO-ListNavigation
-          'J'|'j' => {self.last_mode = self.mode; return Ok(Some(Action::LogsPrevious))}, // up // LogsSchedulePrevious Schedule locks me out with resetting modes
-          'H'|'h' => {self.last_mode = self.mode; return Ok(Some(Action::LogsFirst))}, // top
-          'K'|'k' => {self.last_mode = self.mode; return Ok(Some(Action::LogsNext))},  // down
-          'L'|'l' => {self.last_mode = self.mode; return Ok(Some(Action::LogsLast))}, // bottom
-          'N'|'n' => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))}, // unselect
-          // IP-ListNavigation
-          // -- ArrowKeys
-          'W'|'w' => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} return Ok(Some(Action::Blank))},
-          'Q'|'q' => {if self.displaymode == DisplayMode::Query {return Ok(Some(Action::ExitQuery))} else {return Ok(Some(Action::EnterQuery))} },
-          _ => {}
-        }
-      },
-      _ => {},
-    };
-
-    let action = match self.mode {
-      Mode::Processing => return Ok(None),
-      Mode::Normal => {
-        match key.code {
-          KeyCode::Down => {Action::IPsNext},
-          KeyCode::Up => {Action::IPsPrevious},
-          KeyCode::Left => {
-            self.iplist.unselect();
-            self.selected_ip = "".to_string();
-            //Action::Render
-            Action::Blank
-          },
-          KeyCode::Right | KeyCode::Tab | KeyCode::Enter => {Action::EnterTakeAction},
-          _ => {
-            self.input.handle_event(&crossterm::event::Event::Key(key));
-            //Action::Render
-            Action::Blank
-          },
-        }}
-        //////////////
-      Mode::TakeAction => {
-        match key.code {
-          KeyCode::Tab => {
-            Action::EnterNormal
-          },
-          KeyCode::Left => {
-            self.available_actions.unselect();
-            Action::EnterNormal 
-          },
-          KeyCode::Down => {Action::ActionsNext},
-          KeyCode::Up => {Action::ActionsPrevious},
-          KeyCode::Right | KeyCode::Enter => {
-            let action_idx = self.available_actions.state.selected().unwrap();
-            match self.available_actions.items[action_idx].0 {
-              "Ban" => {Action::Ban},
-              "monitor-fail2ban" => {self.toggle_f2bwatcher(action_idx)},
-              "monitor-journalctl" => {self.toggle_jctlwatcher(action_idx)},
-              "Stats" => {Action::Blank}, // TODO
-              "Query" => {if self.displaymode == DisplayMode::Query {Action::ExitQuery} else {Action::EnterQuery}},
-              "Help" => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} Action::Blank},
-              "Exit" => {Action::Quit},
-              _ => {Action::Blank},
-            }
-          }, 
-          _ => {
-            self.input.handle_event(&crossterm::event::Event::Key(key));
-            //Action::Render
-            Action::Blank
-          },
-        }
-      },
-      Mode::Query => {
-        match key.code {
-          KeyCode::Tab => {self.displaymode = DisplayMode::Normal; 
-          match self.last_mode {
-            Mode::Normal => {Action::EnterNormal},
-            Mode::TakeAction => {Action::EnterTakeAction},
-            Mode::Processing => {Action::EnterNormal},
-            _ => {todo!("This shouldn't happen!")},
+    // dont handle key events until we are fully loaded and not showing stats
+    let mut action: Action = Action::Blank;
+    if self.startup_complete && !self.showing_stats { // fully loaded
+      match key.code {
+        KeyCode::Esc => return Ok(Some(Action::Quit)),
+        KeyCode::Char(keychar) => {
+          match keychar {
+            // General Hotkeys
+            'W'|'w' => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} return Ok(Some(Action::Blank))},
+            'Q'|'q' => {if self.displaymode == DisplayMode::Query {return Ok(Some(Action::ExitQuery))} else {return Ok(Some(Action::EnterQuery))} },
+            'E'|'e' => {return Ok(Some(Action::StatsShow))},
+            'C'|'c' => {return Ok(Some(Action::ConfirmClearLists)) },
+            // DrawMode switching
+            'A'|'a' => {self.drawmode = DrawMode::All; return Ok(Some(Action::Blank))},
+            'S'|'s' => {self.drawmode = DrawMode::Sticky; return Ok(Some(Action::Blank))},
+            'D'|'d' => {self.drawmode = DrawMode::Decaying; return Ok(Some(Action::Blank))},
+            // IO-ListNavigation
+            'J'|'j' => {self.last_mode = self.mode; return Ok(Some(Action::LogsPrevious))}, // up // LogsSchedulePrevious Schedule locks me out with resetting modes
+            'H'|'h' => {self.last_mode = self.mode; return Ok(Some(Action::LogsFirst))}, // top
+            'K'|'k' => {self.last_mode = self.mode; return Ok(Some(Action::LogsNext))},  // down
+            'L'|'l' => {self.last_mode = self.mode; return Ok(Some(Action::LogsLast))}, // bottom
+            'M'|'m' => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))}, // unselect
+            '+'|'-' => { return Ok(Some(Action::SetCapacity))}, // unselect
+            // IP & Action Navigation
+            // -- ArrowKeys
+            // IOMode switching
+            'F'|'f' => {self.iomode = IOMode::Follow; return Ok(Some(Action::Blank))},
+            'G'|'g' => {self.iomode = IOMode::Static; return Ok(Some(Action::Blank))},
+            _ => {}
+          }
+        },
+        _ => {},
+      };
+  
+      action = match self.mode {
+        Mode::Processing => return Ok(None),
+        Mode::Normal => {
+          match key.code {
+            KeyCode::Down => {Action::IPsNext},
+            KeyCode::Up => {Action::IPsPrevious},
+            KeyCode::Left => {
+              self.iplist.unselect();
+              self.selected_ip = "".to_string();
+              //Action::Render
+              Action::Blank
+            },
+            KeyCode::Right | KeyCode::Tab | KeyCode::Enter => {Action::EnterTakeAction},
+            _ => {
+              self.input.handle_event(&crossterm::event::Event::Key(key));
+              //Action::Render
+              Action::Blank
+            },
           }}
-          KeyCode::Char(keychar) => {
-            match keychar {
-              // Digits & Dot
-              '1' => {self.add_to_querystring('1'); Action::Render}, // Action render makes it feel way more responsive
-              '2' => {self.add_to_querystring('2'); Action::Render},
-              '3' => {self.add_to_querystring('3'); Action::Render},
-              '4' => {self.add_to_querystring('4'); Action::Render}, 
-              '5' => {self.add_to_querystring('5'); Action::Render}, 
-              '6' => {self.add_to_querystring('6'); Action::Render}, 
-              '7' => {self.add_to_querystring('7'); Action::Render}, 
-              '8' => {self.add_to_querystring('8'); Action::Render}, 
-              '9' => {self.add_to_querystring('9'); Action::Render},
-              '0' => {self.add_to_querystring('0'); Action::Render},
-              '.' => {self.add_to_querystring('.'); Action::Render},
-              _ => {//Action::Render
-                Action::Blank}
-            }
-          },
-          KeyCode::Backspace => {self.rm_last_char_from_querystring(); Action::Render},
-          KeyCode::Enter => {if self.submit_query() {Action::Blank} else {Action::InvalidQuery}}, // print something to the querybox, best -> mark invalid chars / num chars
-          _ => {
-            self.input.handle_event(&crossterm::event::Event::Key(key));
-            //Action::Render
-            Action::Blank
-          },
-        }      
-      },
-    };
-    
+          //////////////
+        Mode::TakeAction => {
+          match key.code {
+            KeyCode::Tab => {
+              Action::EnterNormal
+            },
+            KeyCode::Left => {
+              self.available_actions.unselect();
+              Action::EnterNormal 
+            },
+            KeyCode::Down => {Action::ActionsNext},
+            KeyCode::Up => {Action::ActionsPrevious},
+            KeyCode::Right | KeyCode::Enter => {
+              let action_idx = self.available_actions.state.selected().unwrap();
+              match self.available_actions.items[action_idx].0 {
+                "Ban" => {Action::Ban},
+                "monitor-fail2ban" => {self.toggle_f2bwatcher(action_idx)},
+                "monitor-journalctl" => {self.toggle_jctlwatcher(action_idx)},
+                "Stats" => {Action::Blank}, // TODO
+                "Query" => {if self.displaymode == DisplayMode::Query {Action::ExitQuery} else {Action::EnterQuery}},
+                "Help" => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} Action::Blank},
+                "Exit" => {Action::Quit},
+                _ => {Action::Blank},
+              }
+            }, 
+            _ => {
+              self.input.handle_event(&crossterm::event::Event::Key(key));
+              //Action::Render
+              Action::Blank
+            },
+          }
+        },
+        ////
+        Mode::Query => {
+          match key.code {
+            KeyCode::Tab => {self.displaymode = DisplayMode::Normal; 
+            match self.last_mode {
+              Mode::Normal => {Action::EnterNormal},
+              Mode::TakeAction => {Action::EnterTakeAction},
+              Mode::Processing => {Action::EnterNormal},
+              _ => {todo!("This shouldn't happen!")},
+            }}
+            KeyCode::Char(keychar) => {
+              match keychar {
+                // Digits & Dot
+                '1' => {self.add_to_querystring('1'); Action::Render}, // Action render makes it feel way more responsive
+                '2' => {self.add_to_querystring('2'); Action::Render},
+                '3' => {self.add_to_querystring('3'); Action::Render},
+                '4' => {self.add_to_querystring('4'); Action::Render}, 
+                '5' => {self.add_to_querystring('5'); Action::Render}, 
+                '6' => {self.add_to_querystring('6'); Action::Render}, 
+                '7' => {self.add_to_querystring('7'); Action::Render}, 
+                '8' => {self.add_to_querystring('8'); Action::Render}, 
+                '9' => {self.add_to_querystring('9'); Action::Render},
+                '0' => {self.add_to_querystring('0'); Action::Render},
+                '.' => {self.add_to_querystring('.'); Action::Render},
+                _ => {//Action::Render
+                  Action::Blank}
+              }
+            },
+            KeyCode::Backspace => {self.rm_last_char_from_querystring(); Action::Render},
+            KeyCode::Enter => {if self.submit_query() {Action::Blank} else {Action::InvalidQuery}}, // print something to the querybox, best -> mark invalid chars / num chars
+            _ => {
+              self.input.handle_event(&crossterm::event::Event::Key(key));
+              //Action::Render
+              Action::Blank
+            },
+          }      
+        },
+        Mode::ConfirmClear => {
+          match key.code {
+            KeyCode::Char(keychar) => {
+              match keychar {
+                // Digits & Dot
+                'Y'|'y' => {Action::ConfirmedClearLists}, // Action render makes it feel way more responsive
+                'N'|'n' => {Action::AbortClearLists},
+                'C'|'c' => {Action::AbortClearLists},
+                _ => {//Action::Render
+                  Action::Blank}
+              }
+            },
+            KeyCode::Backspace => {Action::AbortClearLists}
+            _ => {
+              self.input.handle_event(&crossterm::event::Event::Key(key));
+              //Action::Render
+              Action::Blank            
+            },
+          }
+        },
+        Mode::SetIOCapacity => {
+          match key.code { 
+            KeyCode::Char(keychar) => {
+              match keychar {
+                // Digits
+                '1' => {self.add_to_capacitystring('1'); Action::Render}, // Action render makes it feel way more responsive
+                '2' => {self.add_to_capacitystring('2'); Action::Render},
+                '3' => {self.add_to_capacitystring('3'); Action::Render},
+                '4' => {self.add_to_capacitystring('4'); Action::Render}, 
+                '5' => {self.add_to_capacitystring('5'); Action::Render}, 
+                '6' => {self.add_to_capacitystring('6'); Action::Render}, 
+                '7' => {self.add_to_capacitystring('7'); Action::Render}, 
+                '8' => {self.add_to_capacitystring('8'); Action::Render}, 
+                '9' => {self.add_to_capacitystring('9'); Action::Render},
+                '0' => {self.add_to_capacitystring('0'); Action::Render},
+                '+'|'-' => {Action::SubmittedCapacity}
+                _ => {//Action::Render
+                  Action::Blank}
+              }
+            },          
+            KeyCode::Backspace => {self.rm_last_char_from_capacitystring(); Action::Render},
+            KeyCode::Enter => {if self.submit_capacity() {Action::SubmittedCapacity} else {self.iostreamed_capacity_input = String::from(""); Action::Blank}},
+            _ => {self.input.handle_event(&crossterm::event::Event::Key(key)); Action::Blank  }
+          }
+        }
+      };
+    }
+   
     Ok(Some(action))
   }
 
   fn update(&mut self, action: Action) -> Result<Option<Action>> {
 
     match action {
-      Action::Tick => {
-      },
+      Action::Tick => {},
       Action::StartupDone => {self.startup_complete = true; self.command_tx.clone().unwrap().send(Action::Refresh)?;}
       Action::EnterNormal => {self.mode = Mode::Normal; self.last_mode = self.mode;},
       Action::EnterTakeAction => {self.mode = Mode::TakeAction; self.last_mode = self.mode;},
@@ -682,6 +859,15 @@ impl Component for Home<'_> {
       Action::ExitProcessing => {self.mode = self.last_mode;}, // TODO: Last mode, solved? No we have to look into the future to see if we want to change to same again and then forgo that
       Action::EnterQuery => {self.last_mode = self.mode; self.mode = Mode::Query; self.displaymode = DisplayMode::Query;}
       Action::ExitQuery => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
+
+      //General
+      Action::ConfirmClearLists => {self.last_mode = self.mode; self.mode = Mode::ConfirmClear; self.displaymode = DisplayMode::ConfirmClear;}
+      Action::AbortClearLists => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
+      Action::ConfirmedClearLists => { self.clear_lists(); self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
+      Action::SetCapacity => {self.last_mode = self.mode; self.mode = Mode::SetIOCapacity; self.displaymode = DisplayMode::SetIOCapacity;},
+      Action::SubmittedCapacity => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
+      Action::SelectTheme(x) => {self.select_new_theme(x)},
+
       // List Actions
       // -- LOG LIST -- iostreamed
       Action::LogsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsNext);}, // deprec
@@ -726,7 +912,7 @@ impl Component for Home<'_> {
       Action::QueryNotFound(x) => {self.queryerror = format!("IP not found: {}", x);},
       Action::SubmitQuery(x) => {self.querystring = String::from("") ;self.queryerror = format!("Querying IP: {}", x);},
 
-      Action::GotGeo(x,y) => {
+      Action::GotGeo(x,y, z) => {
 
         self.style_incoming_message(y.clone());
 
@@ -752,32 +938,41 @@ impl Component for Home<'_> {
 
           //self.iplist.items.push((cip.clone(), x.clone(), self.last_username.clone()));
           self.iplist.items.push(iplistitem);
-          self.iplist.trim_to_length(10); // change to const
+          self.iplist.trim_to_length(self.iplist_capacity); // change to const
 
-          if self.iplist.items.len() > 1 {
-            self.iplist.state.select(Option::Some(self.iplist.items.len()-1));
+          if self.iomode == IOMode::Follow {
+            if self.iplist.items.len() > 1 {
+              self.iplist.state.select(Option::Some(self.iplist.items.len()-1));
+            }
+            else {
+              self.iplist.state.select(Option::Some(0));
+            }
+  
+            self.selected_ip = cip;
           }
-          else {
-            self.iplist.state.select(Option::Some(0));
-          }
-          self.selected_ip = cip;
+
           
-
-
         } 
         else {
-          // ip is already in vector, need to select it again
-          for i in 0..self.iplist.items.len() {
-            let item = &self.iplist.items[i];
-            if item.IP.ip == cip {
-              self.iplist.state.select(Some(i));
-              self.iplist.items[i].pointdata.refresh();
-              self.selected_ip = cip;
-              break;
+          // ip is already in vector, need to select it again if IOmode is follow
+          if self.iomode == IOMode::Follow {
+            for i in 0..self.iplist.items.len() {
+              let item = &self.iplist.items[i];
+              if item.IP.ip == cip {
+                self.iplist.state.select(Some(i));
+                self.iplist.items[i].pointdata.refresh();
+                self.selected_ip = cip;
+                break;
+              }
             }
           }
         }    
       },
+
+      // Stats
+      Action::StatsShow => {self.showing_stats = true;},
+      Action::StatsHide => {self.showing_stats = false;}
+
       Action::Ban => {
         let sel_ip = self.iplist.state.selected();
         let banip: String;
@@ -799,7 +994,7 @@ impl Component for Home<'_> {
 
   fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
     
-    if self.startup_complete {
+    if self.startup_complete && !self.showing_stats {
 
       for item in &mut self.iplist.items {
         item.pointdata.decay_point(self.apptheme.decay_time);
@@ -863,7 +1058,7 @@ impl Component for Home<'_> {
           }
   
   
-          ListItem::new(lines).style(Style::default().fg(Color::White))
+          ListItem::new(lines).style(self.apptheme.default_text_style)
       })
       .collect();
   
@@ -899,7 +1094,7 @@ impl Component for Home<'_> {
                 .italic()
                 .into(),
           );
-          ListItem::new(lines).style(Style::default().fg(Color::White))
+          ListItem::new(lines).style(self.apptheme.default_text_style)
       })
       .collect();
   
@@ -969,12 +1164,31 @@ impl Component for Home<'_> {
   
   
         let iolist_title = Line::from(vec![
-          Span::styled(" I/O Stream [ ", Style::default().fg(Color::White)),
+          Span::styled(" I/O Stream [ ", self.apptheme.default_text_style),
           Span::styled(animsymbols[self.elapsed_rticks],
             match ioactive { 0 => {Style::default().fg(self.apptheme.colors.accent_wred)}, 1 => {Style::default().fg(self.apptheme.colors.accent_lpink)}, 2 => {Style::default().fg(self.apptheme.colors.accent_blue)} _ => {Style::default().fg(self.apptheme.colors.accent_wred)}}),
-          Span::styled(" ] ", Style::default().fg(Color::White)),
+          Span::styled(" ] ", self.apptheme.default_text_style),
         ]);
   
+        let iolist_selected_idx = self.stored_styled_iostreamed.state.selected();
+        let selected_symb = if iolist_selected_idx.is_some() { let selnum = iolist_selected_idx.unwrap() + 1;
+          selnum.to_string()} else {String::from("-")};
+        let ciolist_len = self.stored_styled_iostreamed.items.len();
+        let list_capacity_diff = self.iostreamed_capacity - ciolist_len; 
+        
+        let capacity_color = if list_capacity_diff < 10 {self.apptheme.colors.accent_blue} else if list_capacity_diff == 0 {self.apptheme.colors.accent_orange} else {Color::White};
+
+
+        let iolist_capacity_display = Line::from(vec![
+          Span::styled(format!("[ "), self.apptheme.default_text_style),
+          Span::styled(format!("{}", selected_symb), Style::default().fg(self.apptheme.colors.accent_blue)), // selected
+          Span::styled(format!(" : "), self.apptheme.default_text_style), // separator
+          Span::styled(format!("{}", ciolist_len), Style::default().fg(capacity_color)), // current num
+          Span::styled(format!(" / ", ), self.apptheme.default_text_style), // separator
+          Span::styled(format!("{}", self.iostreamed_capacity), Style::default().fg(capacity_color)), // capacity
+          Span::styled(format!(" ]"), self.apptheme.default_text_style),
+        ]); 
+
         // Create a List from all list items and highlight the currently selected one
         let iolist = List::new( iolines) //self.styledio.clone()
             .block(Block::default()
@@ -985,7 +1199,8 @@ impl Component for Home<'_> {
                   Mode::Normal => {Style::new().white()},
                   _ => Style::new().white(),
                 })
-              .title(iolist_title)
+              .title(block::Title::from(iolist_title).alignment(Alignment::Left))
+              .title(block::Title::from(iolist_capacity_display).alignment(Alignment::Right))
             )
             //.highlight_style(self.apptheme.highlight_item_style)
             .highlight_symbol(">> ");
@@ -1014,7 +1229,7 @@ impl Component for Home<'_> {
       // display popups/overlays
       match self.displaymode {
         DisplayMode::Help => {
-          let p_area = self.centered_rect(f.size(), 35, 40);
+          let p_area = self.centered_rect(f.size(), 35, 45);
           f.render_widget(Clear, p_area);
           f.render_widget(self.create_help_popup(),p_area);
           },
@@ -1025,6 +1240,18 @@ impl Component for Home<'_> {
           f.render_widget(self.create_query_popup(),p_area);
         },
         DisplayMode::Stats => {},
+
+        DisplayMode::ConfirmClear => {
+          let p_area = self.centered_rect(f.size(), 20, 5);
+          f.render_widget(Clear, p_area);
+          f.render_widget(self.create_clearlist_popup(),p_area);
+        },
+        DisplayMode::SetIOCapacity => {
+          self.anim_querycursor.next();
+          let p_area = self.centered_rect(f.size(), 20, 5);
+          f.render_widget(Clear, p_area);
+          f.render_widget(self.popup_set_io_capacity() ,p_area);
+        },
         _ => {},
       }
 

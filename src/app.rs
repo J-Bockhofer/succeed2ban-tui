@@ -14,17 +14,17 @@ use tokio_util::sync::CancellationToken;
 use std::sync::Arc;
 
 
-use crate::components::startup::Startup;
+
 use crate::{
   action::Action,
-  components::{home::Home, fps::FpsCounter, Component},
+  components::{home::Home, fps::FpsCounter, Component, startup::Startup, stats::Stats},
   config::Config,
   mode::Mode,
   tui,
   tasks,
   geofetcher,
   gen_structs,
-  migrations::schema,
+  migrations::schema::ip::IP,
 };
 
 use regex::Regex;
@@ -40,7 +40,7 @@ pub struct App {
   pub mode: Mode,
   pub last_tick_key_events: Vec<KeyEvent>,
   pub last_ip: String,
-  pub stored_geo: Vec<schema::IP>,
+  pub stored_geo: Vec<IP>,
   f2bw_handle: Option<JoinHandle<()>>,
   jctl_handle: Option<JoinHandle<()>>,
   dbconn: Option<Connection>,
@@ -56,12 +56,13 @@ impl App {
     let home = Home::new();
     let fps = FpsCounter::default();
     let startup = Startup::new();
+    let stats = Stats::new();
     let config = Config::new()?;
     let mode = Mode::Startup;
     Ok(Self {
       tick_rate,
       frame_rate,
-      components: vec![Box::new(home), Box::new(fps), Box::new(startup)], //Box::new(home), Box::new(fps)
+      components: vec![Box::new(home), Box::new(fps), Box::new(startup), Box::new(stats)], //Box::new(home), Box::new(fps)
       should_quit: false,
       should_suspend: false,
       config,
@@ -176,6 +177,8 @@ impl App {
           Action::Suspend => self.should_suspend = true,
           Action::Resume => self.should_suspend = false,
           Action::StartupDone => self.mode = Mode::Home, //
+          Action::StatsShow => self.mode = Mode::Stats,
+          Action::StatsHide => self.mode = Mode::Home,
           Action::Resize(w, h) => {
             tui.resize(Rect::new(0, 0, w, h))?;
             tui.draw(|f| {

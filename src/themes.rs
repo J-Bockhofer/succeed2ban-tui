@@ -3,12 +3,14 @@ use color_eyre::owo_colors::OwoColorize;
 use ratatui::{style::Style, prelude::Color, prelude::Modifier};
 use regex::Regex;
 
+use::serde::{Deserialize, Serialize};
+
 use std::iter::Map;
 //use std::collections::HashMap;
 
 pub mod colors;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct WordStylePair {
     pub word: String,
     pub style: Style,
@@ -21,7 +23,7 @@ impl WordStylePair {
 }
 
 
-
+#[derive(Clone)]
 pub struct RegexStylePair {
     pub word_regex: Regex,
     pub style: Style,
@@ -45,7 +47,7 @@ impl RegexStylePair {
 // in the closure {} iterate through
 // 
 //}
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct WordStyleMap {
     pub word_styles: Vec<WordStylePair>,
 }
@@ -78,6 +80,7 @@ impl WordStyleMap {
 
 }
 
+#[derive(Default, Clone)]
 pub struct RegexStyleMap {
     pub regex_styles: Vec<RegexStylePair>,
 }
@@ -110,7 +113,7 @@ impl RegexStyleMap {
 
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ThemeColors {
     pub default_background: Color,
     pub default_map_color: Color,
@@ -136,6 +139,7 @@ impl ThemeColors {
     }
 }
 
+#[derive(Clone)]
 pub struct Theme {
     // Text Styling
     pub word_style_map: WordStyleMap,
@@ -190,7 +194,52 @@ impl Theme {
         }
     }
 
-    
+/*     pub fn default_light() -> Self {
+        Theme { word_style_map: WordStyleMap{ word_styles: vec![
+            WordStylePair::new(String::from("Found"), Style::default().fg(colors::ACCENT_ORANGE)),
+            WordStylePair::new(String::from("Ban"), Style::default().fg(colors::ACCENT_ORANGE)),
+            WordStylePair::new(String::from("INFO"), Style::default().fg(colors::ACCENT_DBLUE)),
+            WordStylePair::new(String::from("WARNING"), Style::default().fg(colors::ACCENT_LPINK)),
+            WordStylePair::new(String::from("NOTICE"), Style::default().fg(colors::ACCENT_LIME)),
+            WordStylePair::new(String::from("user"), Style::default().fg(colors::ACCENT_BLUE)),
+            WordStylePair::new(String::from("fatal:"), Style::default().fg(colors::ACCENT_ORANGE)),
+            WordStylePair::new(String::from("Accepted"), Style::default().fg(colors::ACCENT_LIME)),
+        ]
+    }, 
+    regex_style_map: RegexStyleMap{ regex_styles: vec![
+        RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // IP v4
+        RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp HH:MM:SS
+        //RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp HH:MM:SS
+    ]},
+    default_text_style: Style::default().fg(colors::LBLACK),
+    username_style: Style::default().fg(colors::ACCENT_ORANGE),
+    default_background: Style::default().bg(colors::LIGHT_BACKGROUND_2),
+    border_style: Style::default(),
+    active_border_style: Style::new().fg(colors::BBLUE),
+    journal_bg: Style::default().bg(colors::LBLACK),
+    fail2ban_bg: Style::default().bg(Color::Rgb(48, 48, 48)),
+    selected_ip_bg: Style::default().bg(colors::EMPTY),
+    ipregex: Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(),
+    highlight_item_style: Style::default()
+                            .fg(Color::Black)
+                            .bg(colors::ACCENT_BLUE)
+                            .add_modifier(Modifier::BOLD),
+    colors: ThemeColors { 
+        default_background: colors::LIGHT_BACKGROUND, 
+        default_map_color: colors::LBLACK, 
+        accent_blue: colors::DPURP, 
+        accent_orange: colors::ACCENT_WRED,
+        accent_lorange: colors::ACCENT_WRED,
+        accent_dblue: colors::DDPURP,
+        accent_wred: colors::ACCENT_WRED,
+        accent_lpink: colors::ACCENT_LPINK,
+        accent_lime: colors::ACCENT_LIME,
+        lblack: colors::LIGHT_BACKGROUND_2,
+        ddblue: colors::DDBLUE,
+    },
+    decay_time: tokio::time::Duration::from_secs(10),
+ }        
+    } */
 
 
 }
@@ -242,5 +291,32 @@ impl Default for Theme {
             },
             decay_time: tokio::time::Duration::from_secs(10),
          }      
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct ThemeContainer {
+    pub name: String,
+    pub theme: Theme,
+}
+impl ThemeContainer {
+    pub fn new(name:String, theme: Theme) -> Self {
+        ThemeContainer { name, theme }
+    }
+} 
+
+
+
+pub struct Themes {
+    pub theme_collection: Vec<ThemeContainer>,
+}
+impl Default for Themes {
+    fn default() -> Self {
+        Themes { theme_collection: vec![
+            ThemeContainer::new("DefaultDark".to_string(), Theme::default()),
+            //ThemeContainer::new("DefaultLight".to_string(), Theme::default_light()),
+
+        ] }
+
     }
 }

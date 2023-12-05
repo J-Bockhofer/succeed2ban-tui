@@ -1,6 +1,8 @@
 
 use ratatui::prelude::Color;
 
+
+// DefaultDark Colors
 pub const BACKGROUND: Color = Color::Rgb(37,37,38);
 pub const ACCENT_BLUE: Color = Color::Rgb(136,171,246);
 pub const ACCENT_DBLUE: Color = Color::LightBlue;
@@ -18,3 +20,15 @@ pub const EMPTY: Color = Color::Rgb(0,0,0);
 
 // Nice Fat Blue
 pub const BBLUE: Color = Color::Rgb(36,71,146);
+
+// DefaultBright Colors
+pub const BRIGHT_BACKGROUND: Color = Color::Rgb(255,249,236);
+pub const LIGHT_BACKGROUND: Color = Color::Rgb(250,244,231);
+pub const LIGHT_BACKGROUND_2: Color = Color::Rgb(239,232,219);
+pub const LIGHT_LIME: Color = Color::Rgb(200,235,119);
+pub const DORANGE: Color = Color::Rgb(168,129,45);
+pub const DDPURP: Color = Color::Rgb(75,55,93);
+pub const DPURP: Color = Color::Rgb(106,50,159);
+pub const LPURP: Color = Color::Rgb(150,111,187);
+// Color = Color::Rgb(150,111,187)
+//pub const LIGHT_MAP: Color = Color::Rgb(250,244,231);

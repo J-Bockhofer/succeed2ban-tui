@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::migrations::schema;
+use crate::{migrations::schema::{ip::IP, city::City, region::Region, isp::ISP, country::Country}, themes::Themes};
 use rusqlite::{Connection, Result};
 
 
@@ -28,6 +28,15 @@ pub enum Action {
   ExitProcessing,
 
   Blank,
+
+  // General Actions
+  ConfirmClearLists,
+  AbortClearLists,
+  ConfirmedClearLists,
+  ClearLists,
+
+  SetCapacity,
+  SubmittedCapacity,
 
   // List state actions
   // -- LOG LIST -- iostreamed
@@ -63,8 +72,8 @@ pub enum Action {
   IONotify(String),
   //FetchGeo(gen_structs::Geodata),
 
-  // second string is the line,
-  GotGeo(schema::IP, String),
+  // second string is the line, bool is if it came from IO or DB
+  GotGeo(IP, String, bool),
   Ban,
   BanIP(String),
   Banned(bool),
@@ -74,15 +83,29 @@ pub enum Action {
   StopJCtlWatcher,
   StoppedJCtlWatcher,
 
+  // Startup
   StartupConnect,
   StartupConnected,
-
-
   StartupConnectedDB,
   StartupCreateDB,
-
-
   StartupDone,
+  // Select Theme, by themename by i dont know how to send an enum through another enum
+  SelectTheme(String),
+
+  // Stats
+  StatsShow,
+  StatsHide,
+
+  StatsGetCountries,
+  StatsGetISPs,
+  StatsGetRegions,
+  StatsGetCities,
+
+  StatsGotCountry(Country, Vec<String>),
+  StatsGotISP(ISP, Vec<String>),
+  StatsGotRegion(Region, Vec<String>),
+  StatsGotCity(City, Vec<String>),
+
 }
 
 impl<'de> Deserialize<'de> for Action {

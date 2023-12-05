@@ -20,7 +20,11 @@ use tracing::trace;
 use tui_input::{backend::crossterm::EventHandler, Input};
 
 use super::{Component, Frame};
+use crate::gen_structs::StatefulList;
+use crate::themes::ThemeContainer;
 use crate::{action::Action, config::key_event_to_string, themes, animations::Animation, migrations::schema, geofetcher};
+use crate::migrations::schema::{message, isp, city, region, country, ip};
+
 
 use rand::prelude::*;
 
@@ -38,12 +42,14 @@ fn map_range(from_range: (f64, f64), to_range: (f64, f64), s: f64) -> f64 {
   }
 
 
+
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub enum Mode {
   #[default]
   Init,
   Loading,
   Done,
+  Completed,
   Confirmed,
 }
 
@@ -62,6 +68,8 @@ pub struct Startup <'a>{
   pub num_ticks: usize,
   apptheme: themes::Theme,
   elapsed_frames: f64,
+  countdown_to_start: usize,
+
   points: Vec<(f64,f64,f64,f64)>,
 
   // db connection,
@@ -77,10 +85,12 @@ pub struct Startup <'a>{
 
   // tmp
   last_ip: String,
-  stored_geo: Vec<schema::IP>,
+  stored_geo: Vec<ip::IP>,
 
   // startup line
   startup_lines: Vec<&'a str>,
+
+  available_themes: StatefulList<ThemeContainer>,
 
 }
 
@@ -119,6 +129,9 @@ impl <'a> Startup <'a> {
     aß6,algâds&/)0,y(-mâk&d2lhcß(-(m
     -#4.f,f&))â07c-9,l)c&#4g,/c%)â%h
     lf0ß4dl09f7/mms#.d2hmf44gf-c-10m"]);
+    self.countdown_to_start = 10;
+
+    self.available_themes.items = themes::Themes::default().theme_collection;
     self
   }
 
@@ -126,17 +139,17 @@ impl <'a> Startup <'a> {
     let dt = Utc::now();
     self.log_messages.push(format!("{}            init db", dt.to_string()));
 
-    self.dbconn.as_ref().unwrap().execute(schema::CREATE_COUNTRY_DB_SQL, []).expect("Error setting up country db");
+    self.dbconn.as_ref().unwrap().execute(country::CREATE_COUNTRY_DB_SQL, []).expect("Error setting up country db");
 
-    self.dbconn.as_ref().unwrap().execute(schema::CREATE_CITY_DB_SQL, []).expect("Error setting up city db");
+    self.dbconn.as_ref().unwrap().execute(city::CREATE_CITY_DB_SQL, []).expect("Error setting up city db");
 
-    self.dbconn.as_ref().unwrap().execute(schema::CREATE_REGION_DB_SQL, []).expect("Error setting up city db");
+    self.dbconn.as_ref().unwrap().execute(region::CREATE_REGION_DB_SQL, []).expect("Error setting up city db");
 
-    self.dbconn.as_ref().unwrap().execute(schema::CREATE_ISP_DB_SQL, []).expect("Error setting up ISP db");
+    self.dbconn.as_ref().unwrap().execute(isp::CREATE_ISP_DB_SQL, []).expect("Error setting up ISP db");
 
-    self.dbconn.as_ref().unwrap().execute(schema::CREATE_IP_DB_SQL, []).expect("Error setting up IP db");
+    self.dbconn.as_ref().unwrap().execute(ip::CREATE_IP_DB_SQL, []).expect("Error setting up IP db");
 
-    self.dbconn.as_ref().unwrap().execute(schema::CREATE_MESSAGE_DB_SQL, []).expect("Error setting up IP db");
+    self.dbconn.as_ref().unwrap().execute(message::CREATE_MESSAGE_DB_SQL, []).expect("Error setting up IP db");
 
     let dt = Utc::now();
     self.log_messages.push(format!("{}            db ready", dt.to_string()));
@@ -145,6 +158,23 @@ impl <'a> Startup <'a> {
     
 
   }
+
+  pub fn get_initial_stats(&mut self) {
+    let tx = self.action_tx.clone().unwrap();
+    let dt = Utc::now();
+    self.log_messages.push(format!("{}            Fetching stats", dt.to_string()));
+    tokio::spawn(async move {
+      tx.send(Action::StatsGetCountries).expect("Failed to get Countries on Startup");    
+      tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+      tx.send(Action::StatsGetCities).expect("Failed to get Cities on Startup");
+      tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+      tx.send(Action::StatsGetRegions).expect("Failed to get Regions on Startup");   
+      tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+      tx.send(Action::StatsGetISPs).expect("Failed to get ISPs on Startup");  
+      tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;    
+    });
+  }
+
 
   pub fn set_rng_points(mut self) -> Self {
     let mut rng = rand::thread_rng();
@@ -167,12 +197,28 @@ impl <'a> Startup <'a> {
     self
   }
 
+  pub fn set_theme(&mut self) {
+    let theme_idx = self.available_themes.state.selected();
+    if theme_idx.is_some() {
+      let theme_idx = theme_idx.unwrap();
+      let tx = self.action_tx.clone().unwrap();
+      let selected_theme = self.available_themes.items[theme_idx].clone();
+      self.apptheme = selected_theme.theme;
 
+      tx.send(Action::SelectTheme(selected_theme.name)).expect("Error sending Theme Change");
+    }
+
+  }
+
+  pub fn add_thyme(&mut self) {
+    self.countdown_to_start = self.countdown_to_start.saturating_add(2);
+  }
 
   pub fn tick(&mut self) {
     log::info!("Tick");
     self.num_ticks += 1;
     self.anim_dotdotdot.next();
+    self.countdown_to_start = self.countdown_to_start.saturating_sub(1);
 
     self.app_ticker = self.app_ticker.saturating_add(1);
     self.last_events.drain(..);
@@ -194,13 +240,14 @@ impl <'a> Startup <'a> {
             self.points = vec![];
         }
     }
+    if self.mode == Mode::Done && self.countdown_to_start == 0 {
+      if self.elapsed_frames > 12.  { // sync load with anim
+        let _ = self.action_tx.clone().unwrap().send(Action::StartupDone);
+      }      
+    }
 
     if self.elapsed_frames > 12. {
         self.elapsed_frames = 0.;
-        if self.num_ticks > 12 {
-            self.mode = Mode::Done;
-            let _ = self.action_tx.clone().unwrap().send(Action::StartupDone);
-        }
     }
     self.render_ticker = self.render_ticker.saturating_add(1);
   }
@@ -243,9 +290,17 @@ impl Component for Startup <'_> {
     self.last_events.push(key.clone());
     let action = match self.mode {
       Mode::Init => {Action::Render},
-      Mode::Done => Action::StartupDone,
+      Mode::Done => {
+        match key.code {
+          KeyCode::Up => {self.available_themes.previous(); self.add_thyme();},
+          KeyCode::Down => {self.available_themes.next(); self.add_thyme();},
+          KeyCode::Enter => {self.set_theme(); self.add_thyme();},
+          _ => {},
+        }
+        
+        Action::Render},
       _ =>  {self.input.handle_event(&crossterm::event::Event::Key(key));
-      Action::Render},
+      Action::Blank},
     };
     Ok(Some(action))
   }
@@ -254,6 +309,7 @@ impl Component for Startup <'_> {
     match action {
       Action::Tick => {self.tick()},
       Action::Render => self.render_tick(),
+      Action::StartupDone => {self.mode = Mode::Completed;}
       Action::StartupConnect => {
         let dt = Utc::now();
 
@@ -263,6 +319,10 @@ impl Component for Startup <'_> {
 
         self.dbconn = Some(conn);
         self.create_db();
+
+        self.get_initial_stats();
+
+        self.mode = Mode::Done;
         
       },
       Action::IONotify(ref x) => {
@@ -306,12 +366,12 @@ impl Component for Startup <'_> {
           let conn = self.dbconn.as_ref().unwrap();
           //let conn2 = conn.clone();
 
-          let maybe_data = schema::select_ip(conn, cip).unwrap_or_default().take().unwrap_or_default();
+          let maybe_data = ip::select_ip(conn, cip).unwrap_or_default().take().unwrap_or_default();
 
         
-          if maybe_data == schema::IP::default() {
+          if maybe_data == ip::IP::default() {
             // we have to fetch the data
-            let timestamp = chrono::offset::Local::now();
+            let timestamp = chrono::offset::Local::now().to_rfc3339();
   
 
             self.last_ip = String::from(cip);
@@ -334,8 +394,8 @@ impl Component for Startup <'_> {
               let georegionname = String::from(geodat.get("regionName").unwrap().as_str().unwrap());
   
   
-              let mut geodata: schema::IP = schema::IP::default();
-              geodata.created_at = timestamp.to_string();
+              let mut geodata: ip::IP = ip::IP::default();
+              geodata.created_at = timestamp;
               geodata.ip = geoip;
               geodata.lat = geolat;
               geodata.lon = geolon;
@@ -351,72 +411,74 @@ impl Component for Startup <'_> {
               
 
             
-              sender.send(Action::GotGeo(geodata, x.clone())).unwrap_or_default();
+              sender.send(Action::GotGeo(geodata, x.clone(), false)).unwrap_or_default(); // false, GeoData was acquired freshly
             });
             
           }
           else {
             // data is stored
-            self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data, x.clone()))?;  
+            self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data, x.clone(), true))?;  // return true, GeoData came from DB
           }
 
 
         }
 
       },
-      Action::GotGeo(x, y) => {
-
+      Action::GotGeo(x, y, z) => {
+        // Guard: if GeoData is from DB we return immediately, to not insert it again
+        if z {return Ok(Option::None);} 
+        
         let conn = self.dbconn.as_ref().unwrap();
-        let mut ip = schema::select_ip(conn, x.ip.as_str()).unwrap_or_default().unwrap_or_default();
+        let mut ip = ip::select_ip(conn, x.ip.as_str()).unwrap_or_default().unwrap_or_default(); // check if freshly acquired geodata has ip thats in db already
         let mut ip_in_db: bool = true;
 
-        if ip == schema::IP::default() {
+        if ip == ip::IP::default() {
           ip_in_db = false;
         }
 
-        let mut isp: schema::ISP = schema::select_isp(conn, x.isp.as_str()).unwrap_or_default().unwrap_or_default();
-        if isp == schema::ISP::default() {
-          let _ = schema::insert_new_ISP(conn, x.isp.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
+        let mut isp: isp::ISP = isp::select_isp(conn, x.isp.as_str()).unwrap_or_default().unwrap_or_default();
+        if isp == isp::ISP::default() {
+          let _ = isp::insert_new_ISP(conn, x.isp.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
         }
         else {
           isp.warnings += 1;
           if !ip_in_db && x.is_banned {isp.banned += 1;}
-          let _ = schema::insert_new_ISP(conn, isp.name.as_str(), Some(isp.banned), Some(isp.warnings)).unwrap();
+          let _ = isp::insert_new_ISP(conn, isp.name.as_str(), Some(isp.banned), Some(isp.warnings)).unwrap();
         }
 
-        let mut country = schema::select_country(conn, x.country.as_str()).unwrap_or_default().unwrap_or_default();
-        if country == schema::Country::default() {
-          let _ = schema::insert_new_country(conn, x.country.as_str(), Some(x.countrycode.as_str()), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
+        let mut country = country::select_country(conn, x.country.as_str()).unwrap_or_default().unwrap_or_default();
+        if country == country::Country::default() {
+          let _ = country::insert_new_country(conn, x.country.as_str(), Some(x.countrycode.as_str()), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
         }
         else {
           country.warnings += 1;
           if !ip_in_db && x.is_banned {country.banned += 1;}
-          let _ = schema::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings)).unwrap();
+          let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings)).unwrap();
         }
 
-        let mut region = schema::select_region(conn, x.region.as_str()).unwrap_or_default().unwrap_or_default();
-        if region == schema::Region::default() {
-          let _ = schema::insert_new_region(conn, x.region.as_str(), x.country.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
+        let mut region = region::select_region(conn, x.region.as_str()).unwrap_or_default().unwrap_or_default();
+        if region == region::Region::default() {
+          let _ = region::insert_new_region(conn, x.region.as_str(), x.country.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
         }
         else {
           region.warnings += 1;
           if !ip_in_db && x.is_banned {region.banned += 1;}
-          let _ = schema::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings)).unwrap();
+          let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings)).unwrap();
         }
 
-        let mut city = schema::select_city(conn, x.city.as_str()).unwrap_or_default().unwrap_or_default();
-        if city == schema::City::default() {
-          let _ = schema::insert_new_city(conn, x.city.as_str(), x.country.as_str(), x.region.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
+        let mut city = city::select_city(conn, x.city.as_str()).unwrap_or_default().unwrap_or_default();
+        if city == city::City::default() {
+          let _ = city::insert_new_city(conn, x.city.as_str(), x.country.as_str(), x.region.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
         }
         else {
           city.warnings += 1;
           if !ip_in_db && x.is_banned {city.banned += 1;}
-          let _ = schema::insert_new_city(conn, city.name.as_str(), city.country.as_str(),city.region.as_str(), Some(city.banned), Some(city.warnings)).unwrap();
+          let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(),city.region.as_str(), Some(city.banned), Some(city.warnings)).unwrap();
         }
 
         
         if !ip_in_db {
-          let _ = schema::insert_new_IP(conn, 
+          let _ = ip::insert_new_IP(conn, 
             x.ip.as_str(), x.created_at.as_str(), 
             x.lon.as_str(), x.lat.as_str(), 
             x.isp.as_str(), x.city.as_str(), 
@@ -426,7 +488,7 @@ impl Component for Startup <'_> {
         }
         else {
           ip.warnings += 1;
-          let _ = schema::insert_new_IP(conn,
+          let _ = ip::insert_new_IP(conn,
             x.ip.as_str(), x.created_at.as_str(), 
             x.lon.as_str(), x.lat.as_str(), 
             x.isp.as_str(), x.city.as_str(), 
@@ -444,40 +506,96 @@ impl Component for Startup <'_> {
           }
         }
 
-        let timestamp = chrono::offset::Local::now();
+        let timestamp = chrono::offset::Local::now().to_rfc3339();
 
-        let _ = schema::insert_new_message(conn, Option::None, &timestamp.to_string(), &y, &x.ip, is_jctl, is_ban).unwrap();
+        let _ = message::insert_new_message(conn, Option::None, &timestamp, &y, &x.ip, &x.country, &x.region, &x.city, &x.isp, is_jctl, is_ban).unwrap();
 
 
         //self.stored_geo.push(x.clone()); 
       },
       Action::SubmitQuery(x) => {
         let conn = self.dbconn.as_ref().unwrap();
-        let ip = schema::select_ip(conn, x.as_str()).unwrap_or_default().unwrap_or_default();
+        let ip = ip::select_ip(conn, x.as_str()).unwrap_or_default().unwrap_or_default();
 
         let tx = self.action_tx.clone().unwrap();
 
-        let opmsgs = schema::select_message_by_ip(conn, x.as_str()).unwrap();
-        let mut actmsgs: Vec<schema::Message> = vec![];
+        let opmsgs = message::select_message_by_ip(conn, x.as_str()).unwrap();
+        let mut actmsgs: Vec<message::Message> = vec![];
 
         for opmsg in opmsgs {
-          let msg = opmsg.unwrap_or(schema::Message::default());
-          if msg != schema::Message::default() {actmsgs.push(msg);}
+          let msg = opmsg.unwrap_or(message::Message::default());
+          if msg != message::Message::default() {actmsgs.push(msg);}
         }
 
-        if ip == schema::IP::default() {
+        if ip == ip::IP::default() {
           // send back query not found
           tx.send(Action::QueryNotFound(x)).expect("QueryNotFound failed to send!");
         } else {
           // spawn thread to send debounced messages
           tokio::spawn(async move{
             for msg in actmsgs {
-              tx.send(Action::GotGeo(ip.clone(), msg.text)).expect("GotGeo failed to send on query!"); 
+              tx.send(Action::GotGeo(ip.clone(), msg.text, true)).expect("GotGeo failed to send on query!"); 
               tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;}
               // inefficient but else but require me to set up a duplicate receiver or refactor receive function
           });
         }        
       },
+
+      Action::StatsGetCountries => {
+        let conn = self.dbconn.as_ref().unwrap();
+        let countries = country::get_all_countries(conn).unwrap_or(vec![]);
+        let tx = self.action_tx.clone().unwrap();
+        tokio::spawn(async move {
+          let conn = Connection::open("iplogs.db").expect("Async thread DB connection failed");
+          for country in countries {
+            std::thread::sleep(std::time::Duration::from_millis(10)); // Debounce
+            let timestamps = message::get_message_timestamps_by_country(&conn, &country.name).unwrap_or(vec![]);
+            tx.send(Action::StatsGotCountry(country, timestamps)).expect("Failed to send Country to Stats");
+         }
+        });
+
+      },
+      Action::StatsGetRegions => {
+        let conn = self.dbconn.as_ref().unwrap();
+        let regions = region::get_all_regions(conn).unwrap_or(vec![]);
+        let tx = self.action_tx.clone().unwrap();
+        tokio::spawn(async move {
+          let conn = Connection::open("iplogs.db").expect("Async thread DB connection failed");
+          for region in regions {
+            std::thread::sleep(std::time::Duration::from_millis(10)); // Debounce
+            let timestamps = message::get_message_timestamps_by_region(&conn, &region.name).unwrap_or(vec![]);
+            tx.send(Action::StatsGotRegion(region, timestamps)).expect("Failed to send Region to Stats");
+         }
+        });
+
+      },
+      Action::StatsGetISPs => {
+        let conn = self.dbconn.as_ref().unwrap();
+        let isps = isp::get_all_isps(conn).unwrap_or(vec![]);
+        let tx = self.action_tx.clone().unwrap();
+        tokio::spawn(async move {
+          let conn = Connection::open("iplogs.db").expect("Async thread DB connection failed");
+          for isp in isps {
+            std::thread::sleep(std::time::Duration::from_millis(10)); // Debounce
+            let timestamps = message::get_message_timestamps_by_isp(&conn, &isp.name).unwrap_or(vec![]);
+            tx.send(Action::StatsGotISP(isp, timestamps)).expect("Failed to send ISP to Stats");
+         }
+        });
+      },
+      Action::StatsGetCities => {
+        let conn = self.dbconn.as_ref().unwrap();
+        let cities = city::get_all_cities(conn).unwrap_or(vec![]);
+        let tx = self.action_tx.clone().unwrap();
+        tokio::spawn(async move {
+          let conn = Connection::open("iplogs.db").expect("Async thread DB connection failed");
+          for city in cities {
+            std::thread::sleep(std::time::Duration::from_millis(10)); // Debounce
+            let timestamps = message::get_message_timestamps_by_city(&conn, &city.name).unwrap_or(vec![]);
+            tx.send(Action::StatsGotCity(city, timestamps)).expect("Failed to send City to Stats");
+         }
+        });
+      },
+
       _ => (),
     }
     Ok(None)
@@ -485,23 +603,18 @@ impl Component for Startup <'_> {
 
   fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
 
-
     match self.mode {
-        Mode::Loading | Mode::Init => {
-
-
-
-
+        Mode::Loading | Mode::Init | Mode::Done => {
 
             let layout = Layout::default().constraints([Constraint::Percentage(80), Constraint::Percentage(20)].as_ref()).split(rect);
+            let sublayout = Layout::default().constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref()).direction(Direction::Horizontal).split(layout[1]);
 
             let canvas = canvas::Canvas::default()
             .background_color(self.apptheme.colors.default_background)
             .block(Block::default().borders(Borders::ALL).title("World").bg(self.apptheme.colors.default_background))
             .marker(Marker::Braille)
             .paint( |ctx| {
-
-    
+   
                 ctx.draw(&canvas::Map {
                     color: self.apptheme.colors.default_map_color,
                     resolution: canvas::MapResolution::High,
@@ -549,7 +662,7 @@ impl Component for Startup <'_> {
             let selected_frame = self.anim_dotdotdot.keyframes[frame_idx];
 
             let mut loglines: Vec<Line> = vec![];
-            loglines.push(Line::from(format!("Render Ticker: {}", self.render_ticker)));
+            loglines.push(Line::from(format!("Countdown to start: {}", self.countdown_to_start)));
             loglines.push(Line::from(format!("App Ticker: {}", self.app_ticker)));
 
             let num_msgs = self.log_messages.len();
@@ -565,30 +678,28 @@ impl Component for Startup <'_> {
             }
 
 
-/*             let mut text: Vec<Line> = self.text.clone().iter().map(|l| Line::from(l.clone())).collect();
-            text.insert(0, "".into());
-            text.insert(0, "Loading".into());
-            text.insert(0, format!("{}", selected_frame).into());
-            text.insert(0, "".into());
-            text.insert(0, format!("Render Ticker: {}", self.render_ticker).into());
-            text.insert(0, format!("App Ticker: {}", self.app_ticker).into());
-            text.insert(0, format!("Counter: {}", self.counter).into());
-            text.insert(0, "".into());
-            text.insert(
-            0,
-            Line::from(vec![
-                "Press ".into(),
-                Span::styled("j", Style::default().fg(Color::Red)),
-                " or ".into(),
-                Span::styled("k", Style::default().fg(Color::Red)),
-                " to ".into(),
-                Span::styled("increment", Style::default().fg(Color::Yellow)),
-                " or ".into(),
-                Span::styled("decrement", Style::default().fg(Color::Yellow)),
-                ".".into(),
-            ]),
-            ); */
-            //text.insert(0, "".into());
+            // create list of themes
+            let av_themes: Vec<ListItem> = self
+            .available_themes
+            .items
+            .iter()
+            .map(|i| {
+                let line = Line::from(i.name.clone());
+                ListItem::new(line).style(self.apptheme.default_text_style)
+            })
+            .collect();
+        
+            // Create a List from all list items and highlight the currently selected one
+            let themeslist = List::new(av_themes)
+                .bg(self.apptheme.colors.lblack)
+                .block(Block::default()
+                .borders(Borders::ALL)
+                .border_style( self.apptheme.active_border_style)
+                .title("Themes"))
+                .highlight_style(self.apptheme.highlight_item_style)
+                .highlight_symbol(">> ");
+
+            f.render_stateful_widget(themeslist, sublayout[1], &mut self.available_themes.state);
 
             f.render_widget(
                 Paragraph::new(loglines)
@@ -600,9 +711,9 @@ impl Component for Startup <'_> {
                       .border_style(self.apptheme.border_style)
                       .border_type(BorderType::Rounded),
                   )
-                  .style(Style::default().fg(Color::White).bg(self.apptheme.colors.lblack)) //self.apptheme.colors.accent_blue
+                  .style(self.apptheme.default_text_style).bg(self.apptheme.colors.lblack) //self.apptheme.colors.accent_blue
                   .alignment(Alignment::Left),
-                layout[1],
+                sublayout[0],
               );
 
             f.render_widget(canvas, layout[0]);

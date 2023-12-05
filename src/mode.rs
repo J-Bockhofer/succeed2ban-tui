@@ -5,4 +5,5 @@ pub enum Mode {
   #[default]
   Home,
   Startup,
+  Stats,
 }
