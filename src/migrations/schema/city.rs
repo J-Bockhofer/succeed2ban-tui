@@ -11,22 +11,24 @@ pub struct City {
     pub warnings: usize,
     pub region: String,
     pub country: String,
+    pub is_blocked: bool,
 }
 pub const CREATE_CITY_DB_SQL: &str = "CREATE TABLE IF NOT EXISTS city(
     name TEXT NOT NULL PRIMARY KEY,
     banned INTEGER,
     warnings INTEGER,
     region TEXT REFERENCES region(name),
-    country TEXT NOT NULL REFERENCES country(name)
+    country TEXT NOT NULL REFERENCES country(name),
+    is_blocked INTEGER NOT NULL
 )
 ";
-pub fn insert_new_city(conn: &Connection, name: &str, country: &str, region:&str, num_banned:Option<usize>, num_messages:Option<usize>) -> Result<()> {
+pub fn insert_new_city(conn: &Connection, name: &str, country: &str, region:&str, num_banned:Option<usize>, num_messages:Option<usize>, is_blocked:bool) -> Result<()> {
     let _banned = num_banned.unwrap_or(0);
     let _msgs = num_messages.unwrap_or(0);
 
     conn.execute(
-        "INSERT OR REPLACE INTO city (name, banned, warnings, region, country) VALUES (?1, ?2, ?3, ?4, ?5)",
-        (name, _banned, _msgs, region, country),
+        "INSERT OR REPLACE INTO city (name, banned, warnings, region, country, is_blocked) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        (name, _banned, _msgs, region, country, is_blocked),
     )?;
     Ok(())
 }
@@ -41,6 +43,7 @@ pub fn select_city(conn: &Connection, city:&str) -> Result<Option<City>> {
             warnings: row.get(2)?,
             region: row.get(3)?,
             country: row.get(4)?,
+            is_blocked: row.get(5)?,
         })
     })?;
 
@@ -68,6 +71,7 @@ pub fn get_all_cities(conn: &Connection) -> Result<Vec<City>> {
             warnings: row.get(2)?,
             region: row.get(3)?,
             country: row.get(4)?,
+            is_blocked: row.get(5)?,
         })
     })?;
 

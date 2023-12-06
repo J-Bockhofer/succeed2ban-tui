@@ -100,6 +100,8 @@ pub enum Mode {
   Query,
   ConfirmClear,
   SetIOCapacity,
+  Ban,
+  Unban,
 }
 
 
@@ -120,6 +122,8 @@ pub enum DisplayMode {
   Stats,
   ConfirmClear,
   SetIOCapacity,
+  Ban,
+  Unban,
 }
 
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
@@ -191,6 +195,9 @@ pub struct Home<'a> {
   querystring: String,
   queryerror: String,
   anim_querycursor: Animation<&'a str>,
+
+  ipstring: String,
+  iperror: String,
 
   available_themes: themes::Themes,
 
@@ -462,6 +469,105 @@ impl<'a> Home<'a> {
 
   }
 
+  fn popup_ban(&mut self)-> impl Widget + '_ {
+
+    let querycursor = self.anim_querycursor.state.selected().unwrap();
+    let querycursor = self.anim_querycursor.keyframes[querycursor];
+    self.ipstring = String::from("");
+    let selected_ip: String;
+    let sel_idx = self.iplist.state.selected();
+    if !self.iplist.items.is_empty() {
+      let sel_idx = sel_idx.unwrap();
+      selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
+      self.ipstring = selected_ip;
+    }
+
+    let mut querytext: Vec<Line> = vec![];
+    let queryline =   Line::from(vec![
+      Span::styled(format!("Ban: {}", self.ipstring), self.apptheme.default_text_style) , 
+      Span::styled(querycursor, self.apptheme.fail2ban_bg)
+      ]);
+    //queryline.patch_style(self.apptheme.selected_ip_bg);
+    querytext.push(queryline);
+    let mut queryerror =   Line::from(format!("Status: {}", self.iperror));
+    queryerror.patch_style(self.apptheme.default_background);
+    querytext.push(queryerror);
+
+    let querybox = Paragraph::new(querytext)
+    .set_style(Style::default())
+    .block(Block::default()
+    .bg(self.apptheme.colors.lblack)
+    .borders(Borders::ALL)
+    .title("Ban"));
+    querybox
+
+  }
+
+  fn popup_unban(&mut self)-> impl Widget + '_ {
+
+    let querycursor = self.anim_querycursor.state.selected().unwrap();
+    let querycursor = self.anim_querycursor.keyframes[querycursor];
+    self.ipstring = String::from("");
+    let selected_ip: String;
+    let sel_idx = self.iplist.state.selected();
+    if !self.iplist.items.is_empty() {
+      let sel_idx = sel_idx.unwrap();
+      selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
+      self.ipstring = selected_ip;
+    }
+
+
+    let mut querytext: Vec<Line> = vec![];
+    let queryline =   Line::from(vec![
+      Span::styled(format!("Unban: {}", self.ipstring), self.apptheme.default_text_style) , 
+      Span::styled(querycursor, self.apptheme.fail2ban_bg)
+      ]);
+    //queryline.patch_style(self.apptheme.selected_ip_bg);
+    querytext.push(queryline);
+
+    let mut queryerror =   Line::from(format!("Status: {}", self.iperror));
+    queryerror.patch_style(self.apptheme.default_background);
+    querytext.push(queryerror);
+
+    let querybox = Paragraph::new(querytext)
+    .set_style(Style::default())
+    .block(Block::default()
+    .bg(self.apptheme.colors.lblack)
+    .borders(Borders::ALL)
+    .title("Unban"));
+    querybox
+
+  }
+
+
+  fn add_to_ipstring(&mut self, ch: char) {
+    self.ipstring.push(ch);
+  }
+
+  fn rm_last_char_from_ipstring(&mut self) {
+    self.ipstring.pop();
+  }
+
+  fn submit_ip(&mut self, is_ban:bool) -> bool {
+    // check if valid IP else return false
+    if self.apptheme.ipregex.is_match(&self.ipstring) {
+      if is_ban {
+        self.command_tx.clone().unwrap().send(Action::RequestBan).unwrap_or_else(|err|{
+          println!("Error submitting query from Home {}", err);
+        });
+      } else {
+        self.command_tx.clone().unwrap().send(Action::RequestUnban).unwrap_or_else(|err|{
+          println!("Error submitting query from Home {}", err);
+        });
+      }
+
+      return true;
+    }
+    false
+  }
+
+
+
   fn toggle_f2bwatcher(&mut self, action_idx: usize) -> Action {
     // check if is active
     if self.f2brunning {
@@ -687,6 +793,8 @@ impl Component for Home<'_> {
             'Q'|'q' => {if self.displaymode == DisplayMode::Query {return Ok(Some(Action::ExitQuery))} else {return Ok(Some(Action::EnterQuery))} },
             'E'|'e' => {return Ok(Some(Action::StatsShow))},
             'C'|'c' => {return Ok(Some(Action::ConfirmClearLists)) },
+            'B'|'b' => {if self.displaymode == DisplayMode::Ban {return Ok(Some(Action::ExitBan))} else {return Ok(Some(Action::EnterBan))}},
+            'U'|'u' => {if self.displaymode == DisplayMode::Unban {return Ok(Some(Action::ExitUnban))} else {return Ok(Some(Action::EnterUnban))}},
             // DrawMode switching
             'A'|'a' => {self.drawmode = DrawMode::All; return Ok(Some(Action::Blank))},
             'S'|'s' => {self.drawmode = DrawMode::Sticky; return Ok(Some(Action::Blank))},
@@ -743,7 +851,7 @@ impl Component for Home<'_> {
             KeyCode::Right | KeyCode::Enter => {
               let action_idx = self.available_actions.state.selected().unwrap();
               match self.available_actions.items[action_idx].0 {
-                "Ban" => {Action::Ban},
+                "Ban" => {Action::RequestBan},
                 "monitor-fail2ban" => {self.toggle_f2bwatcher(action_idx)},
                 "monitor-journalctl" => {self.toggle_jctlwatcher(action_idx)},
                 "Stats" => {Action::Blank}, // TODO
@@ -768,7 +876,7 @@ impl Component for Home<'_> {
               Mode::Normal => {Action::EnterNormal},
               Mode::TakeAction => {Action::EnterTakeAction},
               Mode::Processing => {Action::EnterNormal},
-              _ => {todo!("This shouldn't happen!")},
+              _ => {Action::EnterNormal},
             }}
             KeyCode::Char(keychar) => {
               match keychar {
@@ -817,6 +925,7 @@ impl Component for Home<'_> {
             },
           }
         },
+        ///////
         Mode::SetIOCapacity => {
           match key.code { 
             KeyCode::Char(keychar) => {
@@ -841,7 +950,78 @@ impl Component for Home<'_> {
             KeyCode::Enter => {if self.submit_capacity() {Action::SubmittedCapacity} else {self.iostreamed_capacity_input = String::from(""); Action::Blank}},
             _ => {self.input.handle_event(&crossterm::event::Event::Key(key)); Action::Blank  }
           }
-        }
+        },
+        ///////
+        Mode::Ban => {  match key.code {
+          KeyCode::Tab => {self.displaymode = DisplayMode::Normal; 
+          match self.last_mode {
+            Mode::Normal => {Action::EnterNormal},
+            Mode::TakeAction => {Action::EnterTakeAction},
+            Mode::Processing => {Action::EnterNormal},
+            _ => {Action::EnterNormal},
+          }}
+          KeyCode::Char(keychar) => {
+            match keychar {
+              // Digits & Dot
+              '1' => {self.add_to_ipstring('1'); Action::Render}, // Action render makes it feel way more responsive
+              '2' => {self.add_to_ipstring('2'); Action::Render},
+              '3' => {self.add_to_ipstring('3'); Action::Render},
+              '4' => {self.add_to_ipstring('4'); Action::Render}, 
+              '5' => {self.add_to_ipstring('5'); Action::Render}, 
+              '6' => {self.add_to_ipstring('6'); Action::Render}, 
+              '7' => {self.add_to_ipstring('7'); Action::Render}, 
+              '8' => {self.add_to_ipstring('8'); Action::Render}, 
+              '9' => {self.add_to_ipstring('9'); Action::Render},
+              '0' => {self.add_to_ipstring('0'); Action::Render},
+              '.' => {self.add_to_ipstring('.'); Action::Render},
+              _ => {//Action::Render
+                Action::Blank}
+            }
+          },
+          KeyCode::Backspace => {self.rm_last_char_from_ipstring(); Action::Render},
+          KeyCode::Enter => {if self.submit_ip(true) {self.iperror = String::from("Success!"); Action::Blank} else {self.iperror = String::from("Invalid IP"); Action::Blank}}, // print something to the querybox, best -> mark invalid chars / num chars
+          _ => {
+            self.input.handle_event(&crossterm::event::Event::Key(key));
+            //Action::Render
+            Action::Blank
+          },
+        }      
+      },
+      Mode::Unban => {  match key.code {
+        KeyCode::Tab => {self.displaymode = DisplayMode::Normal; 
+        match self.last_mode {
+          Mode::Normal => {Action::EnterNormal},
+          Mode::TakeAction => {Action::EnterTakeAction},
+          Mode::Processing => {Action::EnterNormal},
+          _ => {Action::EnterNormal},
+        }}
+        KeyCode::Char(keychar) => {
+          match keychar {
+            // Digits & Dot
+            '1' => {self.add_to_ipstring('1'); Action::Render}, // Action render makes it feel way more responsive
+            '2' => {self.add_to_ipstring('2'); Action::Render},
+            '3' => {self.add_to_ipstring('3'); Action::Render},
+            '4' => {self.add_to_ipstring('4'); Action::Render}, 
+            '5' => {self.add_to_ipstring('5'); Action::Render}, 
+            '6' => {self.add_to_ipstring('6'); Action::Render}, 
+            '7' => {self.add_to_ipstring('7'); Action::Render}, 
+            '8' => {self.add_to_ipstring('8'); Action::Render}, 
+            '9' => {self.add_to_ipstring('9'); Action::Render},
+            '0' => {self.add_to_ipstring('0'); Action::Render},
+            '.' => {self.add_to_ipstring('.'); Action::Render},
+            _ => {//Action::Render
+              Action::Blank}
+          }
+        },
+        KeyCode::Backspace => {self.rm_last_char_from_ipstring(); Action::Render},
+        KeyCode::Enter => {if self.submit_ip(false) {self.iperror = String::from("Success!"); Action::Blank} else {self.iperror = String::from("Invalid IP"); Action::Blank}},
+        _ => {
+          self.input.handle_event(&crossterm::event::Event::Key(key));
+          //Action::Render
+          Action::Blank
+        },
+      }      
+    },
       };
     }
    
@@ -859,6 +1039,11 @@ impl Component for Home<'_> {
       Action::ExitProcessing => {self.mode = self.last_mode;}, // TODO: Last mode, solved? No we have to look into the future to see if we want to change to same again and then forgo that
       Action::EnterQuery => {self.last_mode = self.mode; self.mode = Mode::Query; self.displaymode = DisplayMode::Query;}
       Action::ExitQuery => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
+      Action::EnterBan => {self.last_mode = self.mode; self.mode = Mode::Ban; self.iperror = String::default(); self.displaymode = DisplayMode::Ban;}
+      Action::ExitBan => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
+      Action::EnterUnban => {self.last_mode = self.mode; self.mode = Mode::Unban; self.iperror = String::default(); self.displaymode = DisplayMode::Unban;}
+      Action::ExitUnban => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
+
 
       //General
       Action::ConfirmClearLists => {self.last_mode = self.mode; self.mode = Mode::ConfirmClear; self.displaymode = DisplayMode::ConfirmClear;}
@@ -973,19 +1158,50 @@ impl Component for Home<'_> {
       Action::StatsShow => {self.showing_stats = true;},
       Action::StatsHide => {self.showing_stats = false;}
 
-      Action::Ban => {
+      Action::RequestBan => {
         let sel_ip = self.iplist.state.selected();
-        let banip: String;
+        let banip: IP;
         if sel_ip.is_some() {
-          banip = self.iplist.items[sel_ip.unwrap()].IP.ip.clone();
-          self.command_tx.clone().unwrap().send(Action::BanIP(banip))?;
+          banip = self.iplist.items[sel_ip.unwrap()].IP.clone();
+          if banip.ip == self.ipstring {
+            self.command_tx.clone().unwrap().send(Action::BanIP(banip))?;
+          } else {
+            let mut _ip = IP::default();
+            _ip.ip = self.ipstring.clone();
+            self.command_tx.clone().unwrap().send(Action::BanIP(_ip))?;
+          }
 
+          
         } else {
-          todo!()
+          //todo!()
         }
       },
+      Action::RequestUnban => {
+        let sel_ip = self.iplist.state.selected();
+        let banip: IP;
+        if sel_ip.is_some() {
+          banip = self.iplist.items[sel_ip.unwrap()].IP.clone();
+          if banip.ip == self.ipstring {
+            self.command_tx.clone().unwrap().send(Action::UnbanIP(banip))?;
+          } else {
+            let mut _ip = IP::default();
+            _ip.ip = self.ipstring.clone();
+            self.command_tx.clone().unwrap().send(Action::UnbanIP(_ip))?;
+          }
+          
+        } else {
+          //todo!()
+        }
+      },
+
       Action::Banned(x) => {
+        if x {self.infotext = String::from("BANNED");
+        list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitBan);
+      }
+      },
+      Action::Unbanned(x) => {
         if x {self.infotext = String::from("BANNED");}
+        list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitUnban);
       },
       _ => {},
     }
@@ -1252,6 +1468,18 @@ impl Component for Home<'_> {
           f.render_widget(Clear, p_area);
           f.render_widget(self.popup_set_io_capacity() ,p_area);
         },
+        DisplayMode::Ban => {
+          self.anim_querycursor.next();
+          let p_area = self.centered_rect(f.size(), 20, 7);
+          f.render_widget(Clear, p_area);
+          f.render_widget(self.popup_ban() ,p_area)
+        },
+        DisplayMode::Unban => {
+          self.anim_querycursor.next();
+          let p_area = self.centered_rect(f.size(), 20, 7);
+          f.render_widget(Clear, p_area);
+          f.render_widget(self.popup_unban() ,p_area)
+        },
         _ => {},
       }
 
@@ -1271,7 +1499,9 @@ impl Component for Home<'_> {
 
 
     } else {
-      f.render_widget(Paragraph::new("You shouldn't see this, if you keep encountering this problem please create an issue referring to Code: E100"), area);
+      if !self.showing_stats { // Something should definitly be on screen
+        f.render_widget(Paragraph::new("You shouldn't see this, if you keep encountering this problem please create an issue referring to Code: E100"), area);
+      }
     }
 
 

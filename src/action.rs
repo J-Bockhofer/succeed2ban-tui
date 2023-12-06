@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{migrations::schema::{ip::IP, city::City, region::Region, isp::ISP, country::Country}, themes::Themes};
+use crate::{migrations::schema::{ip::IP, city::City, region::Region, isp::ISP, country::Country, message::MiniMessage}, themes::Themes};
 use rusqlite::{Connection, Result};
 
 
@@ -9,6 +9,8 @@ use serde::{
   de::{self, Deserializer, Visitor},
   Deserialize, Serialize,
 };
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Action {
@@ -74,9 +76,24 @@ pub enum Action {
 
   // second string is the line, bool is if it came from IO or DB
   GotGeo(IP, String, bool),
-  Ban,
-  BanIP(String),
+
+
+  // Ban Actions
+  EnterBan,
+  ExitBan,
+  RequestBan,
+  BanIP(IP),
   Banned(bool),
+
+  EnterUnban,
+  ExitUnban,
+  RequestUnban,
+  UnbanIP(IP),
+  Unbanned(bool),
+
+  Block(IP),
+  //
+
   StartF2BWatcher,
   StopF2BWatcher,
   StartJCtlWatcher,
@@ -101,10 +118,23 @@ pub enum Action {
   StatsGetRegions,
   StatsGetCities,
 
-  StatsGotCountry(Country, Vec<String>),
-  StatsGotISP(ISP, Vec<String>),
-  StatsGotRegion(Region, Vec<String>),
-  StatsGotCity(City, Vec<String>),
+  StatsGotCountry(Country, Vec<MiniMessage>),
+  StatsGotISP(ISP, Vec<MiniMessage>),
+  StatsGotRegion(Region, Vec<MiniMessage>),
+  StatsGotCity(City, Vec<MiniMessage>),
+
+  StatsBlockCountry(Country),
+  StatsBlockRegion(Region),
+  StatsBlockCity(City),
+  StatsBlockISP(ISP),
+
+  StatsUnblockCountry(Country),
+  StatsUnblockRegion(Region),
+  StatsUnblockCity(City),
+  StatsUnblockISP(ISP),
+
+  StatsGetIP(String),
+  StatsGotIP(IP),
 
 }
 

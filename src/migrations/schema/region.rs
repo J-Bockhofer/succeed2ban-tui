@@ -9,22 +9,25 @@ pub struct Region {
     pub banned: usize,
     pub warnings: usize,
     pub country: String,
+    pub is_blocked: bool,
 }
 pub const CREATE_REGION_DB_SQL: &str = "CREATE TABLE IF NOT EXISTS region(
     name TEXT NOT NULL PRIMARY KEY,
     banned INTEGER,
     warnings INTEGER,
-    country TEXT NOT NULL REFERENCES country(name)
+    country TEXT NOT NULL REFERENCES country(name),
+    is_blocked INTEGER NOT NULL
+
 )
 ";
 
-pub fn insert_new_region(conn: &Connection, name: &str, country: &str, num_banned:Option<usize>, num_messages:Option<usize>) -> Result<()> {
+pub fn insert_new_region(conn: &Connection, name: &str, country: &str, num_banned:Option<usize>, num_messages:Option<usize>, is_blocked:bool) -> Result<()> {
     let _banned = num_banned.unwrap_or(0);
     let _msgs = num_messages.unwrap_or(0);
 
     conn.execute(
-        "INSERT OR REPLACE INTO region (name, banned, warnings, country) VALUES (?1, ?2, ?3, ?4)",
-        (name, _banned, _msgs, country),
+        "INSERT OR REPLACE INTO region (name, banned, warnings, country, is_blocked) VALUES (?1, ?2, ?3, ?4, ?5)",
+        (name, _banned, _msgs, country, is_blocked),
     )?;
     Ok(())
 }
@@ -38,6 +41,7 @@ pub fn select_region(conn: &Connection, region:&str) -> Result<Option<Region>> {
             banned: row.get(1)?,
             warnings: row.get(2)?,
             country: row.get(3)?,
+            is_blocked: row.get(4)?,
         })
     })?;
 
@@ -65,6 +69,7 @@ pub fn get_all_regions(conn: &Connection) -> Result<Vec<Region>> {
             banned: row.get(1)?,
             warnings: row.get(2)?,
             country: row.get(3)?,
+            is_blocked: row.get(4)?,
         })
     })?;
 

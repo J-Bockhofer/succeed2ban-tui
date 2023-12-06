@@ -85,7 +85,7 @@ pub struct Startup <'a>{
 
   // tmp
   last_ip: String,
-  stored_geo: Vec<ip::IP>,
+  //stored_geo: Vec<ip::IP>,
 
   // startup line
   startup_lines: Vec<&'a str>,
@@ -328,7 +328,8 @@ impl Component for Startup <'_> {
       Action::IONotify(ref x) => {
         // got new line
         let x = x.clone().deref().to_string();
-        let re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
+        let re = self.apptheme.ipregex.clone();
+
         let results: Vec<&str> = re
           .captures_iter(&x)
           .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
@@ -361,6 +362,9 @@ impl Component for Startup <'_> {
             is_banned = true;
           }
 
+          if x.contains("Ban") {
+            is_banned = true;
+          }
 
           //let mut is_in_list: bool = false;
           let conn = self.dbconn.as_ref().unwrap();
@@ -408,7 +412,6 @@ impl Component for Startup <'_> {
               geodata.region = georegionname;
               geodata.warnings = 1;
 
-              
 
             
               sender.send(Action::GotGeo(geodata, x.clone(), false)).unwrap_or_default(); // false, GeoData was acquired freshly
@@ -420,6 +423,14 @@ impl Component for Startup <'_> {
             self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data, x.clone(), true))?;  // return true, GeoData came from DB
           }
 
+
+        } else {
+          // results were empty, might happen if journalctl sends error message -> in that case just insert the last ip into the message and try again
+          if !self.last_ip.is_empty() {
+            let msg = x.clone();
+            let msg = format!("{} for {}", msg, self.last_ip);
+            self.action_tx.clone().unwrap().send(Action::IONotify(msg))?;
+          }
 
         }
 
@@ -436,46 +447,45 @@ impl Component for Startup <'_> {
           ip_in_db = false;
         }
 
-        let mut isp: isp::ISP = isp::select_isp(conn, x.isp.as_str()).unwrap_or_default().unwrap_or_default();
-        if isp == isp::ISP::default() {
-          let _ = isp::insert_new_ISP(conn, x.isp.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
-        }
-        else {
-          isp.warnings += 1;
-          if !ip_in_db && x.is_banned {isp.banned += 1;}
-          let _ = isp::insert_new_ISP(conn, isp.name.as_str(), Some(isp.banned), Some(isp.warnings)).unwrap();
-        }
-
         let mut country = country::select_country(conn, x.country.as_str()).unwrap_or_default().unwrap_or_default();
         if country == country::Country::default() {
-          let _ = country::insert_new_country(conn, x.country.as_str(), Some(x.countrycode.as_str()), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
+          let _ = country::insert_new_country(conn, x.country.as_str(), Some(x.countrycode.as_str()), match x.is_banned {false => Some(0), true => Some(1)}, Some(1), false).unwrap();
         }
         else {
           country.warnings += 1;
           if !ip_in_db && x.is_banned {country.banned += 1;}
-          let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings)).unwrap();
+          let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings), country.is_blocked).unwrap();
         }
 
         let mut region = region::select_region(conn, x.region.as_str()).unwrap_or_default().unwrap_or_default();
         if region == region::Region::default() {
-          let _ = region::insert_new_region(conn, x.region.as_str(), x.country.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
+          let _ = region::insert_new_region(conn, x.region.as_str(), x.country.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1), false).unwrap();
         }
         else {
           region.warnings += 1;
           if !ip_in_db && x.is_banned {region.banned += 1;}
-          let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings)).unwrap();
+          let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings), region.is_blocked).unwrap();
         }
 
         let mut city = city::select_city(conn, x.city.as_str()).unwrap_or_default().unwrap_or_default();
         if city == city::City::default() {
-          let _ = city::insert_new_city(conn, x.city.as_str(), x.country.as_str(), x.region.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1)).unwrap();
+          let _ = city::insert_new_city(conn, x.city.as_str(), x.country.as_str(), x.region.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1), false).unwrap();
         }
         else {
           city.warnings += 1;
           if !ip_in_db && x.is_banned {city.banned += 1;}
-          let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(),city.region.as_str(), Some(city.banned), Some(city.warnings)).unwrap();
+          let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(),city.region.as_str(), Some(city.banned), Some(city.warnings), city.is_blocked).unwrap();
         }
 
+        let mut isp: isp::ISP = isp::select_isp(conn, x.isp.as_str()).unwrap_or_default().unwrap_or_default();
+        if isp == isp::ISP::default() {
+          let _ = isp::insert_new_ISP(conn, x.isp.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1), x.country.as_str(), false).unwrap();
+        }
+        else {
+          isp.warnings += 1;
+          if !ip_in_db && x.is_banned {isp.banned += 1;}
+          let _ = isp::insert_new_ISP(conn, isp.name.as_str(), Some(isp.banned), Some(isp.warnings), x.country.as_str(), isp.is_blocked).unwrap();
+        }
         
         if !ip_in_db {
           let _ = ip::insert_new_IP(conn, 
@@ -504,6 +514,11 @@ impl Component for Startup <'_> {
           if y.contains("Ban") {
             is_ban = true;
           }
+        }
+
+        if country.is_blocked || city.is_blocked || isp.is_blocked || region.is_blocked {
+          let tx = self.action_tx.clone().unwrap();
+          tx.send(Action::BanIP(x.clone())).expect("Block failed to send");
         }
 
         let timestamp = chrono::offset::Local::now().to_rfc3339();
@@ -540,7 +555,6 @@ impl Component for Startup <'_> {
           });
         }        
       },
-
       Action::StatsGetCountries => {
         let conn = self.dbconn.as_ref().unwrap();
         let countries = country::get_all_countries(conn).unwrap_or(vec![]);
@@ -595,6 +609,126 @@ impl Component for Startup <'_> {
          }
         });
       },
+
+      Action::StatsBlockCountry(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        // get item from db to see if it was updated, it will exist becasue we query from stats.
+        let country = country::select_country(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
+        // insert new as blocked
+        let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings), true).unwrap();
+      },
+      Action::StatsUnblockCountry(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        // get item from db to see if it was updated, it will exist becasue we query from stats.
+        let country = country::select_country(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
+        // insert new as unblocked
+        let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings), false).unwrap();
+      },      
+      Action::StatsBlockRegion(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        // get item from db to see if it was updated, it will exist becasue we query from stats.
+        let region = region::select_region(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
+        // insert new as blocked
+        let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings), true).unwrap();
+      },
+      Action::StatsUnblockRegion(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        // get item from db to see if it was updated, it will exist becasue we query from stats.
+        let region = region::select_region(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
+        // insert new as unblocked
+        let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings), false).unwrap();
+      }, 
+      Action::StatsBlockCity(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        // get item from db to see if it was updated, it will exist becasue we query from stats.
+        let city = city::select_city(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
+        // insert new as blocked
+        let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(), city.region.as_str(),Some(city.banned), Some(city.warnings), true).unwrap();
+      },
+      Action::StatsUnblockCity(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        // get item from db to see if it was updated, it will exist becasue we query from stats.
+        let city = city::select_city(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
+        // insert new as unblocked
+        let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(), city.region.as_str(),Some(city.banned), Some(city.warnings), false).unwrap();
+      },    
+      Action::StatsBlockISP(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        // get item from db to see if it was updated, it will exist becasue we query from stats.
+        let isp = isp::select_isp(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
+        // insert new as blocked
+        let _ = isp::insert_new_ISP(conn, isp.name.as_str(),Some(isp.banned), Some(isp.warnings),isp.country.as_str(), true).unwrap();
+      },
+      Action::StatsUnblockISP(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        // get item from db to see if it was updated, it will exist becasue we query from stats.
+        let isp = isp::select_isp(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
+        // insert new as unblocked
+        let _ = isp::insert_new_ISP(conn, isp.name.as_str(), Some(isp.banned), Some(isp.warnings),isp.country.as_str(), false).unwrap();
+      }, 
+      Action::StatsGetIP(x) => {
+        let conn = self.dbconn.as_ref().unwrap();
+        let ipdata = ip::select_ip(conn, x.as_str()).unwrap_or_default().take().unwrap_or_default();
+        if ipdata != ip::IP::default() {
+          let tx = self.action_tx.clone().unwrap();
+          tx.send(Action::StatsGotIP(ipdata)).expect("Failed to send IP data back to Stats");
+        }
+      },
+
+      Action::BanIP(x) => {
+        let tx = self.action_tx.clone().unwrap();
+        tokio::spawn(async move {
+          tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+          // check if is banned
+          let output = std::process::Command::new("fail2ban-client")
+            .arg("set")
+            .arg("sshd")
+            .arg("banip")
+            .arg(&x.ip)
+            // Tell the OS to record the command's output
+            .stdout(std::process::Stdio::piped())
+            // execute the command, wait for it to complete, then capture the output
+            .output()
+            // Blow up if the OS was unable to start the program
+            .unwrap();
+  
+          // extract the raw bytes that we captured and interpret them as a string
+          let stdout = String::from_utf8(output.stdout).unwrap();
+          if stdout.contains("0") {
+            tx.send(Action::Banned(true)).expect("Failed to Ban ...");
+          } else {
+            tx.send(Action::Banned(false)).expect("Failed to Ban ...");
+          }
+        });
+
+      },
+      Action::UnbanIP(x) => {
+        let tx = self.action_tx.clone().unwrap();
+        tokio::spawn(async move {
+          tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+          // check if is banned
+          let output = std::process::Command::new("fail2ban-client")
+            .arg("set")
+            .arg("sshd")
+            .arg("unbanip")
+            .arg(&x.ip)
+            // Tell the OS to record the command's output
+            .stdout(std::process::Stdio::piped())
+            // execute the command, wait for it to complete, then capture the output
+            .output()
+            // Blow up if the OS was unable to start the program
+            .unwrap();
+  
+          // extract the raw bytes that we captured and interpret them as a string
+          let stdout = String::from_utf8(output.stdout).unwrap();
+          if stdout.contains("0") {
+            tx.send(Action::Unbanned(true)).expect("Failed to Unban !!!");
+          } else {
+            tx.send(Action::Unbanned(false)).expect("Failed to Unban !!!");
+          }
+        });
+
+      },      
 
       _ => (),
     }
@@ -663,7 +797,7 @@ impl Component for Startup <'_> {
 
             let mut loglines: Vec<Line> = vec![];
             loglines.push(Line::from(format!("Countdown to start: {}", self.countdown_to_start)));
-            loglines.push(Line::from(format!("App Ticker: {}", self.app_ticker)));
+            loglines.push(Line::from(Span::styled(format!("          --             "), self.apptheme.fail2ban_bg)));
 
             let num_msgs = self.log_messages.len();
             for i in 0..num_msgs {

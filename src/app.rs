@@ -202,23 +202,8 @@ impl App {
           },
           Action::StartupConnect => {
              
-          }
-
-          Action::BanIP(ref x) => {
-            
-            let response = Command::new("echo")
-              .arg("hello")
-              .arg("world")
-              .output()
-              .await
-              .expect("failed to spawn");
-
-            // Await until the command completes
-            let status = response.status.success();
-            //println!("the command exited with: {}", status);
-            action_tx.send(Action::Banned(status))?;
-            todo!();
           },
+
           Action::StartF2BWatcher => {
               // start the fail2ban watcher
               let action_tx2 = action_tx.clone();
