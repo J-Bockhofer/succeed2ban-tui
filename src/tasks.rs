@@ -72,6 +72,7 @@ pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>, rx: Re
                 }
                 let addedlines = msgs.into_iter().collect::<Vec<String>>().join("++++");
                 //println!("> {}", addedlines);
+                //tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
                 _event_tx.send(Action::IONotify(addedlines)).unwrap();
             }
             Err(error) => { println!("{error:?}")},

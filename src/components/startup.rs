@@ -25,6 +25,7 @@ use crate::themes::ThemeContainer;
 use crate::{action::Action, config::key_event_to_string, themes, animations::Animation, migrations::schema, geofetcher};
 use crate::migrations::schema::{message, isp, city, region, country, ip};
 
+use local_ip_address::local_ip;
 
 use rand::prelude::*;
 
@@ -154,8 +155,6 @@ impl <'a> Startup <'a> {
     let dt = Utc::now();
     self.log_messages.push(format!("{}            db ready", dt.to_string()));
 
-    self.log_messages.push(format!("{}            Deciphering binaries", dt.to_string()));
-    
 
   }
 
@@ -173,8 +172,8 @@ impl <'a> Startup <'a> {
       tx.send(Action::StatsGetISPs).expect("Failed to get ISPs on Startup");  
       tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;    
     });
+    self.log_messages.push(format!("{}            Deciphering binaries", dt.to_string()));
   }
-
 
   pub fn set_rng_points(mut self) -> Self {
     let mut rng = rand::thread_rng();
@@ -306,12 +305,57 @@ impl Component for Startup <'_> {
   }
 
   fn update(&mut self, action: Action) -> Result<Option<Action>> {
+    let tx = self.action_tx.clone().unwrap();
     match action {
       Action::Tick => {self.tick()},
       Action::Render => self.render_tick(),
-      Action::StartupDone => {self.mode = Mode::Completed;}
+      Action::StartupDone => {self.mode = Mode::Completed;
+        let tx = self.action_tx.clone().unwrap();
+        let fetchmsg = format!(" ✔ Startup Complete");
+        tx.send(Action::InternalLog(fetchmsg)).expect("Fetchlog message failed to send");
+      }
       Action::StartupConnect => {
         let dt = Utc::now();
+
+        let my_local_ip = local_ip();
+        let tx = self.action_tx.clone().unwrap();
+        tokio::spawn(async move {
+          if let Ok(my_local_ip) = my_local_ip {
+            // perform some work here...
+            let geodat = geofetcher::fetch_geolocation(my_local_ip.to_string().as_str()).await.unwrap_or(serde_json::Value::default());
+
+            let geoip = String::from(geodat.get("query").unwrap().as_str().unwrap());
+            let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string();
+            let geolon = geodat.get("lon").unwrap().as_number().unwrap().to_string();
+            let geoisp = String::from(geodat.get("isp").unwrap().as_str().unwrap());
+
+            let geocountry = String::from(geodat.get("country").unwrap().as_str().unwrap());
+            let geocity = String::from(geodat.get("city").unwrap().as_str().unwrap());
+            let geocountrycode = String::from(geodat.get("countryCode").unwrap().as_str().unwrap());
+            let georegionname = String::from(geodat.get("regionName").unwrap().as_str().unwrap());
+
+
+            let mut geodata: ip::IP = ip::IP::default();
+            geodata.created_at = String::from("");
+            geodata.ip = geoip;
+            geodata.lat = geolat;
+            geodata.lon = geolon;
+            geodata.isp = geoisp;
+            geodata.is_banned = false;
+            geodata.banned_times = 0;
+            geodata.country = geocountry;
+            geodata.countrycode = geocountrycode;
+            geodata.city = geocity;
+            geodata.region = georegionname;
+            geodata.warnings = 1;
+
+            tx.send(Action::StartupGotHome(geodata)).unwrap_or_default(); // false, GeoData was acquired freshly            
+            
+          } else {
+            todo!("Error getting local IP: {:?}", my_local_ip);
+          }
+        });
+
 
         self.log_messages.push(format!("{}            Connecting to db", dt.to_string()));
 
@@ -341,36 +385,37 @@ impl Component for Startup <'_> {
         if !results.is_empty() {
           cip = results[0];
           // string contained an IPv4
-
-          std::thread::sleep(std::time::Duration::from_millis(100));
-          // check if is banned
-          let output = std::process::Command::new("fail2ban-client")
-            .arg("status")
-            .arg("sshd")
-            // Tell the OS to record the command's output
-            .stdout(std::process::Stdio::piped())
-            // execute the command, wait for it to complete, then capture the output
-            .output()
-            // Blow up if the OS was unable to start the program
-            .unwrap();
-  
-          // extract the raw bytes that we captured and interpret them as a string
-          let stdout = String::from_utf8(output.stdout).unwrap();
           let mut is_banned = false;
-
-          if stdout.contains(cip) {
-            is_banned = true;
-          }
-
           if x.contains("Ban") {
             is_banned = true;
           }
+
+          if self.last_ip != String::from(cip) {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            // check if is banned
+            let output = std::process::Command::new("fail2ban-client")
+              .arg("status")
+              .arg("sshd")
+              // Tell the OS to record the command's output
+              .stdout(std::process::Stdio::piped())
+              // execute the command, wait for it to complete, then capture the output
+              .output()
+              // Blow up if the OS was unable to start the program
+              .unwrap();
+    
+            // extract the raw bytes that we captured and interpret them as a string
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            
+            if stdout.contains(cip) {
+              is_banned = true;
+            }
+          };
 
           //let mut is_in_list: bool = false;
           let conn = self.dbconn.as_ref().unwrap();
           //let conn2 = conn.clone();
 
-          let maybe_data = ip::select_ip(conn, cip).unwrap_or_default().take().unwrap_or_default();
+          let mut maybe_data = ip::select_ip(conn, cip).unwrap_or_default().take().unwrap_or_default();
 
         
           if maybe_data == ip::IP::default() {
@@ -420,6 +465,8 @@ impl Component for Startup <'_> {
           }
           else {
             // data is stored
+            self.last_ip = String::from(cip);
+            maybe_data.is_banned = is_banned;
             self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data, x.clone(), true))?;  // return true, GeoData came from DB
           }
 
@@ -436,16 +483,18 @@ impl Component for Startup <'_> {
 
       },
       Action::GotGeo(x, y, z) => {
-        // Guard: if GeoData is from DB we return immediately, to not insert it again
-        if z {return Ok(Option::None);} 
-        
+        // Guard: if GeoData is from DB we return immediately, to not insert it again -> yes ofc insert it again.. how else to update u dingus?!
+        //if z {return Ok(Option::None);} 
+      
         let conn = self.dbconn.as_ref().unwrap();
-        let mut ip = ip::select_ip(conn, x.ip.as_str()).unwrap_or_default().unwrap_or_default(); // check if freshly acquired geodata has ip thats in db already
-        let mut ip_in_db: bool = true;
 
-        if ip == ip::IP::default() {
-          ip_in_db = false;
-        }
+        //let mut ip = ip::select_ip(conn, x.ip.as_str()).unwrap_or_default().unwrap_or_default(); // check if freshly acquired geodata has ip thats in db already, already done
+        let ip_in_db: bool = z;
+
+        //if ip == ip::IP::default() {
+        //  ip_in_db = false;
+        //}
+        let mut ip = x.clone();
 
         let mut country = country::select_country(conn, x.country.as_str()).unwrap_or_default().unwrap_or_default();
         if country == country::Country::default() {
@@ -497,6 +546,7 @@ impl Component for Startup <'_> {
               x.is_banned, x.warnings).unwrap();
         }
         else {
+          // ip is in db
           ip.warnings += 1;
           let _ = ip::insert_new_IP(conn,
             x.ip.as_str(), x.created_at.as_str(), 
@@ -515,10 +565,30 @@ impl Component for Startup <'_> {
             is_ban = true;
           }
         }
+        let tx = self.action_tx.clone().unwrap();
+        tx.send(Action::PassGeo(ip.clone(), y.clone(), z)).expect("PassGeo failed to send");
+        let symb = if z {self.apptheme.symbol_db.clone()} else {self.apptheme.symbol_reqwest.clone()};
+        let fetchmsg = format!(" {} Got location for IP {} ", symb, ip.ip);
+        tx.send(Action::InternalLog(fetchmsg)).expect("Fetchlog message failed to send");
 
-        if country.is_blocked || city.is_blocked || isp.is_blocked || region.is_blocked {
-          let tx = self.action_tx.clone().unwrap();
+        if country.is_blocked || city.is_blocked || isp.is_blocked || region.is_blocked {         
           tx.send(Action::BanIP(x.clone())).expect("Block failed to send");
+          let timestamp = chrono::offset::Local::now().to_rfc3339();
+          let mut reasons: Vec<String> = vec![];
+          if country.is_blocked {reasons.push(format!("Country: {}", country.name));}
+          if region.is_blocked {reasons.push(format!("Region: {}", region.name));}
+          if city.is_blocked {reasons.push(format!("City: {}", city.name));}
+          if isp.is_blocked {reasons.push(format!("ISP: {}", isp.name));}
+
+          //let blockmsg = format!("{}    [succeed2ban.filter]      Blocked IP {} - Filter [ {} ] ", timestamp, ip.ip, reasons.join(" "));
+          //tx.send(Action::IONotify(blockmsg)).expect("Blocklog message failed to send");
+
+          let blockmsg = format!(" {} Blocked IP {} :", self.apptheme.symbol_block, ip.ip);
+          tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
+          for reason in reasons {
+            let blockmsg = format!(" {} Blocked {} ",self.apptheme.symbol_block , reason);
+            tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
+          }
         }
 
         let timestamp = chrono::offset::Local::now().to_rfc3339();
@@ -549,7 +619,7 @@ impl Component for Startup <'_> {
           // spawn thread to send debounced messages
           tokio::spawn(async move{
             for msg in actmsgs {
-              tx.send(Action::GotGeo(ip.clone(), msg.text, true)).expect("GotGeo failed to send on query!"); 
+              tx.send(Action::PassGeo(ip.clone(), msg.text, true)).expect("PassGeo failed to send on query!"); 
               tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;}
               // inefficient but else but require me to set up a duplicate receiver or refactor receive function
           });
@@ -616,6 +686,8 @@ impl Component for Startup <'_> {
         let country = country::select_country(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as blocked
         let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings), true).unwrap();
+        let fetchmsg = format!(" {} Blocked Country: {}", self.apptheme.symbol_block, &x.name);
+        tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Block Country message failed to send");
       },
       Action::StatsUnblockCountry(x) => {
         let conn = self.dbconn.as_ref().unwrap();
@@ -623,6 +695,8 @@ impl Component for Startup <'_> {
         let country = country::select_country(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as unblocked
         let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings), false).unwrap();
+        let fetchmsg = format!(" {} Unblocked Country: {}", self.apptheme.symbol_unblock, &x.name);
+        tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unblock Country message failed to send");
       },      
       Action::StatsBlockRegion(x) => {
         let conn = self.dbconn.as_ref().unwrap();
@@ -630,6 +704,8 @@ impl Component for Startup <'_> {
         let region = region::select_region(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as blocked
         let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings), true).unwrap();
+        let fetchmsg = format!(" {} Blocked Region: {}", self.apptheme.symbol_block, &x.name);
+        tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Block Region message failed to send");
       },
       Action::StatsUnblockRegion(x) => {
         let conn = self.dbconn.as_ref().unwrap();
@@ -637,6 +713,8 @@ impl Component for Startup <'_> {
         let region = region::select_region(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as unblocked
         let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings), false).unwrap();
+        let fetchmsg = format!(" {} Unblocked Region: {}", self.apptheme.symbol_unblock, &x.name);
+        tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unblock Region message failed to send");
       }, 
       Action::StatsBlockCity(x) => {
         let conn = self.dbconn.as_ref().unwrap();
@@ -644,6 +722,8 @@ impl Component for Startup <'_> {
         let city = city::select_city(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as blocked
         let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(), city.region.as_str(),Some(city.banned), Some(city.warnings), true).unwrap();
+        let fetchmsg = format!(" {} Blocked City: {}", self.apptheme.symbol_block, &x.name);
+        tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Block City message failed to send");
       },
       Action::StatsUnblockCity(x) => {
         let conn = self.dbconn.as_ref().unwrap();
@@ -651,6 +731,8 @@ impl Component for Startup <'_> {
         let city = city::select_city(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as unblocked
         let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(), city.region.as_str(),Some(city.banned), Some(city.warnings), false).unwrap();
+        let fetchmsg = format!(" {} Unblocked City: {}", self.apptheme.symbol_unblock, &x.name);
+        tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unblock City message failed to send");
       },    
       Action::StatsBlockISP(x) => {
         let conn = self.dbconn.as_ref().unwrap();
@@ -658,6 +740,8 @@ impl Component for Startup <'_> {
         let isp = isp::select_isp(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as blocked
         let _ = isp::insert_new_ISP(conn, isp.name.as_str(),Some(isp.banned), Some(isp.warnings),isp.country.as_str(), true).unwrap();
+        let fetchmsg = format!(" {} Blocked ISP: {}", self.apptheme.symbol_unblock, &x.name);
+        tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Block ISP message failed to send");
       },
       Action::StatsUnblockISP(x) => {
         let conn = self.dbconn.as_ref().unwrap();
@@ -665,6 +749,8 @@ impl Component for Startup <'_> {
         let isp = isp::select_isp(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as unblocked
         let _ = isp::insert_new_ISP(conn, isp.name.as_str(), Some(isp.banned), Some(isp.warnings),isp.country.as_str(), false).unwrap();
+        let fetchmsg = format!(" {} Unblocked ISP: {}", self.apptheme.symbol_unblock, &x.name);
+        tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unblock ISP message failed to send");
       }, 
       Action::StatsGetIP(x) => {
         let conn = self.dbconn.as_ref().unwrap();
@@ -676,58 +762,66 @@ impl Component for Startup <'_> {
       },
 
       Action::BanIP(x) => {
-        let tx = self.action_tx.clone().unwrap();
-        tokio::spawn(async move {
-          tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-          // check if is banned
-          let output = std::process::Command::new("fail2ban-client")
-            .arg("set")
-            .arg("sshd")
-            .arg("banip")
-            .arg(&x.ip)
-            // Tell the OS to record the command's output
-            .stdout(std::process::Stdio::piped())
-            // execute the command, wait for it to complete, then capture the output
-            .output()
-            // Blow up if the OS was unable to start the program
-            .unwrap();
-  
-          // extract the raw bytes that we captured and interpret them as a string
-          let stdout = String::from_utf8(output.stdout).unwrap();
-          if stdout.contains("0") {
-            tx.send(Action::Banned(true)).expect("Failed to Ban ...");
-          } else {
-            tx.send(Action::Banned(false)).expect("Failed to Ban ...");
-          }
-        });
-
+        if !x.is_banned {
+          let tx = self.action_tx.clone().unwrap();
+          let symb = self.apptheme.symbol_ban.clone();
+          tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+            // check if is banned
+            let output = std::process::Command::new("fail2ban-client")
+              .arg("set")
+              .arg("sshd")
+              .arg("banip")
+              .arg(&x.ip)
+              // Tell the OS to record the command's output
+              .stdout(std::process::Stdio::piped())
+              // execute the command, wait for it to complete, then capture the output
+              .output()
+              // Blow up if the OS was unable to start the program
+              .unwrap();
+    
+            // extract the raw bytes that we captured and interpret them as a string
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            if stdout.contains("0") {
+              tx.send(Action::Banned(true)).expect("Failed to Ban ...");
+              let fetchmsg = format!(" {} Banned IP: {}", symb, &x.ip);
+              tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Ban IP message failed to send");
+            } else {
+              tx.send(Action::Banned(false)).expect("Failed to Ban ...");
+            }
+          });
+        }
       },
       Action::UnbanIP(x) => {
-        let tx = self.action_tx.clone().unwrap();
-        tokio::spawn(async move {
-          tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-          // check if is banned
-          let output = std::process::Command::new("fail2ban-client")
-            .arg("set")
-            .arg("sshd")
-            .arg("unbanip")
-            .arg(&x.ip)
-            // Tell the OS to record the command's output
-            .stdout(std::process::Stdio::piped())
-            // execute the command, wait for it to complete, then capture the output
-            .output()
-            // Blow up if the OS was unable to start the program
-            .unwrap();
-  
-          // extract the raw bytes that we captured and interpret them as a string
-          let stdout = String::from_utf8(output.stdout).unwrap();
-          if stdout.contains("0") {
-            tx.send(Action::Unbanned(true)).expect("Failed to Unban !!!");
-          } else {
-            tx.send(Action::Unbanned(false)).expect("Failed to Unban !!!");
-          }
-        });
-
+        if x.is_banned {
+          let tx = self.action_tx.clone().unwrap();
+          let symb = self.apptheme.symbol_unblock.clone();
+          tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+            // check if is banned
+            let output = std::process::Command::new("fail2ban-client")
+              .arg("set")
+              .arg("sshd")
+              .arg("unbanip")
+              .arg(&x.ip)
+              // Tell the OS to record the command's output
+              .stdout(std::process::Stdio::piped())
+              // execute the command, wait for it to complete, then capture the output
+              .output()
+              // Blow up if the OS was unable to start the program
+              .unwrap();
+    
+            // extract the raw bytes that we captured and interpret them as a string
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            if stdout.contains("0") {
+              tx.send(Action::Unbanned(true)).expect("Failed to Unban !!!");
+              let fetchmsg = format!(" {} Unbanned IP: {}", symb, &x.ip);
+              tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unban IP message failed to send");
+            } else {
+              tx.send(Action::Unbanned(false)).expect("Failed to Unban !!!");
+            }
+          });
+        }
       },      
 
       _ => (),

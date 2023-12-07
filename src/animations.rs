@@ -1,7 +1,7 @@
 use ratatui::widgets::ListState;
 
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Animation<T> {
   pub state: ListState,
   pub keyframes: Vec<T>,
@@ -16,6 +16,7 @@ impl<T> Animation<T> {
   }
 
   pub fn next(&mut self) {
+    if self.keyframes.is_empty() {return;}
       let i = match self.state.selected() {
           Some(i) => {
               if i >= self.keyframes.len() - 1 {
@@ -31,6 +32,7 @@ impl<T> Animation<T> {
   }
 
   pub fn previous(&mut self) {
+    if self.keyframes.is_empty() {return;}
       let i = match self.state.selected() {
           Some(i) => {
               if i == 0 {

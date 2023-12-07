@@ -1,3 +1,16 @@
+pub mod ui;
+pub mod utils;
+use utils::{centered_rect, map_range};
+
+pub mod structs;
+use structs::{StyledLine, PointData, IPListItem};
+
+pub mod actions;
+use actions::{style_incoming_message, parse_passed_geo};
+
+pub mod enums;
+use enums::*;
+
 use std::{collections::HashMap, time::Duration, ops::Index};
 
 use color_eyre::eyre::Result;
@@ -17,7 +30,7 @@ use crate::{
   themes, animations, migrations::schema,
   migrations::schema::ip::IP,
   action_handlers::list_actions,
-  animations::Animation,
+  animations::Animation, components::home::ui::create_internal_logs,
 };
 
 use tui_input::{backend::crossterm::EventHandler, Input};
@@ -25,113 +38,6 @@ use log::error;
 
 use regex::Regex;
 
-#[derive(Default, Clone)]
-struct StyledLine {
-  words: Vec<(String, Style)>,
-}
-
-#[derive(Clone, PartialEq)]
-struct PointData {
-  pub ip: String,
-  pub lon: f64,
-  pub lat: f64,
-  pub dir_home_lon: f64,
-  pub dir_home_lat: f64,
-  pub start_time: tokio::time::Instant,
-  pub is_alive: bool,
-}
-
-impl PointData {
-  pub fn new(ip: String, lon:f64, lat:f64, dir_lon: f64, dir_lat: f64)-> Self {
-    PointData { ip, lon, lat, dir_home_lon: dir_lon, dir_home_lat: dir_lat, start_time: tokio::time::Instant::now(), is_alive: true }
-  }
-  pub fn decay_point(&mut self, decaytime: tokio::time::Duration) {
-    if self.start_time.elapsed() > decaytime {
-      self.is_alive = false;
-    } 
-    else {
-      self.is_alive = true;
-    }
-  }
-
-  pub fn refresh(&mut self) {
-    let timenow = tokio::time::Instant::now();
-    self.is_alive = true;
-    self.start_time = timenow;
-  }
-  
-}
-
-impl Default for PointData {
-   fn default() -> Self {
-      PointData::new(String::default(), f64::default(), f64::default(), f64::default(), f64::default())
-  }
-}
-
-//iplist: StatefulList<(String, schema::IP, String)>,
-#[allow(non_snake_case)]
-#[derive(Clone, Default)]
-struct IPListItem {
-  pub IP: IP,
-  pub username: String,
-  pub pointdata: PointData,
-}
-#[allow(non_snake_case)]
-impl IPListItem {
-  pub fn new(IP:IP, username:String, pointdata: PointData)-> Self {
-    IPListItem { IP, username, pointdata}
-  }
-}
-
-
-
-fn map_range(from_range: (f64, f64), to_range: (f64, f64), s: f64) -> f64 {
-  to_range.0 + (s - from_range.0) * (to_range.1 - to_range.0) / (from_range.1 - from_range.0)
-}
-
-
-
-#[derive(Default, Copy, Clone, PartialEq, Eq)]
-pub enum Mode {
-  #[default]
-  Normal,
-  TakeAction,
-  Processing,
-  Query,
-  ConfirmClear,
-  SetIOCapacity,
-  Ban,
-  Unban,
-}
-
-
-#[derive(Default, Copy, Clone, PartialEq, Eq)]
-pub enum DrawMode {
-  #[default]
-  Sticky,
-  Decaying,
-  All,
-}
-
-#[derive(Default, Copy, Clone, PartialEq, Eq)]
-pub enum DisplayMode {
-  #[default]
-  Normal,
-  Help,
-  Query,
-  Stats,
-  ConfirmClear,
-  SetIOCapacity,
-  Ban,
-  Unban,
-}
-
-#[derive(Default, Copy, Clone, PartialEq, Eq)]
-pub enum IOMode {
-  #[default]
-  Follow, // will jump to freshly received IP
-  Static, // will stay at selected IP
-}
 
 
 #[derive(Default)]
@@ -164,6 +70,7 @@ pub struct Home<'a> {
   last_direction: (f64, f64), //tuple vector2D that points towards home; 0/x = lon, 1/y = lat
   // home - last 
 
+  internal_logs: StatefulList<String>,
 
 
   iplist: StatefulList<IPListItem>,
@@ -211,6 +118,7 @@ impl<'a> Home<'a> {
   pub fn set_items(mut self) -> Self {
     self.iplist = StatefulList::with_items(vec![
     ]);
+    self.internal_logs = StatefulList::with_items(vec![]);
     self.iplist_capacity = 10;
     self.available_actions = StatefulList::with_items(vec![
       ("Ban", String::from("some ip")),
@@ -224,7 +132,6 @@ impl<'a> Home<'a> {
     ]);
     self.last_lat = 53.0416;
     self.last_lon = 8.9433;
-
 
     self.home_lat = 53.0416;
     self.home_lon = 8.9433;
@@ -357,118 +264,6 @@ impl<'a> Home<'a> {
     false
   }
 
-  fn centered_rect(&self, r: Rect, percent_x: u16, percent_y: u16) -> Rect {
-    let popup_layout = Layout::default()
-      .direction(Direction::Vertical)
-      .constraints([
-        Constraint::Percentage((100 - percent_y) / 2),
-        Constraint::Percentage(percent_y),
-        Constraint::Percentage((100 - percent_y) / 2),
-      ])
-      .split(r);
-  
-    Layout::default()
-      .direction(Direction::Horizontal)
-      .constraints([
-        Constraint::Percentage((100 - percent_x) / 2),
-        Constraint::Percentage(percent_x),
-        Constraint::Percentage((100 - percent_x) / 2),
-      ])
-      .split(popup_layout[1])[1]
-  }
-
-  fn create_help_popup(&self) -> impl Widget + '_ {
-    // make a layout in center of the screen, outside this function, pass area to this  
-    let active_drawmode = match self.drawmode {
-      DrawMode::All => {"All   "},
-      DrawMode::Decaying => {"Decay "},
-      DrawMode::Sticky => {"Sticky"},
-    };
-    let active_iomode = match self.iomode {
-      IOMode::Follow => {"Follow"},
-      IOMode::Static => {"Static"},
-    };
-
-    // make text
-    let mut helptext: Vec<Line> = vec![];
-    let mut hheader =   Line::from(format!("---           HOTKEYS       ---                                                                 -"));
-    hheader.patch_style(self.apptheme.fail2ban_bg);
-    helptext.push(hheader);
-    helptext.push(                Line::from(format!("Key:          Name          Info")));
-    let mut hheader =   Line::from(format!("---           General       ---                                                                 -"));
-    hheader.patch_style(self.apptheme.fail2ban_bg);
-    helptext.push(hheader);    
-    helptext.push(                Line::from(format!("Arrowkeys:    Select        Select item in IPs or Actions dependent on mode")));
-    helptext.push(                Line::from(format!("Tab:          Mode          Switch Mode between IP-List & Actions")));
-    helptext.push(                Line::from(format!("W|w:          Help          Toggle help")));
-    helptext.push(                Line::from(format!("Q|q:          Query         Toggle query input for IP data from db")));
-    helptext.push(                Line::from(format!("E|e:          Stats         Switch to Stats-Screen")));  
-    helptext.push(                Line::from(format!("C|c:          Clear         Clears IP and I/O Lists")));
-    helptext.push(                Line::from(format!("Enter:        Execute       Context dependent selection or execution")));
-    let mut hheader =   Line::from(format!("---           Drawmode      ---                                           {}                -", active_drawmode)); // for more spaces bc inserted string has six characters
-    hheader.patch_style(self.apptheme.fail2ban_bg);
-    helptext.push(hheader);
-    helptext.push(                Line::from(format!("A|a:          All           Draws all connections all the time")));
-    helptext.push(                Line::from(format!("S|s:          Sticky        Draws only the selection connection")));
-    helptext.push(                Line::from(format!("D|d:          Decay         Draws each connection for 10 seconds")));
-    let mut ioheader =  Line::from(format!("---           I/O Stream    ---                                 Capacity: {}                -", self.iostreamed_capacity));
-    ioheader.patch_style(self.apptheme.fail2ban_bg);
-    helptext.push(ioheader);
-    helptext.push(                Line::from(format!("H|h:          First         Select oldest line in I/O Streamed")));
-    helptext.push(                Line::from(format!("J|j:          Previous      Select previous line in I/O Streamed")));
-    helptext.push(                Line::from(format!("K|k:          Next          Select next line in I/O Streamed")));
-    helptext.push(                Line::from(format!("L|l:          Last          Select latest line in I/O Streamed")));
-    helptext.push(                Line::from(format!("N|n:          Unselect      Reset line selection in I/O Streamed")));
-    helptext.push(                Line::from(format!("+|-:          Set Capacity  Input a new capacity for I/O Streamed")));
-    let mut hheader =   Line::from(format!("---           IO-Mode       ---                                           {}                -", active_iomode)); // four more spaces bc inserted string has six characters
-    hheader.patch_style(self.apptheme.fail2ban_bg);
-    helptext.push(hheader);
-    helptext.push(                Line::from(format!("F|f:          Follow        Auto-selects the last received IP")));
-    helptext.push(                Line::from(format!("G|g:          Static        Selection stays where you left it")));   
-    let mut hheader =   Line::from(format!("---           DEBUG         ---                                                                 -"));    
-    hheader.patch_style(self.apptheme.fail2ban_bg);
-    helptext.push(hheader);
-    helptext.push(Line::from(format!("Received I/O:   {}", self.infotext.clone())));
-    helptext.push(Line::from(format!("numLinesLast:   {}", self.elapsed_notify.to_string())));
-    helptext.push(Line::from(format!("dbg-msg:        {}", self.debug_me)));
-
-    let infoblock = Paragraph::new(helptext)
-    .set_style(Style::default())
-    .block(Block::default()
-    .bg(self.apptheme.colors.lblack)
-    .borders(Borders::ALL)
-    .title("Help"));
-    infoblock
-
-  }
-
-  fn create_query_popup(&self)-> impl Widget + '_ {
-
-    let querycursor = self.anim_querycursor.state.selected().unwrap();
-    let querycursor = self.anim_querycursor.keyframes[querycursor];
-
-    let mut querytext: Vec<Line> = vec![];
-    let queryline =   Line::from(vec![
-      Span::styled(format!("Query: {}", self.querystring), self.apptheme.selected_ip_bg) , 
-      Span::styled(querycursor, self.apptheme.fail2ban_bg)
-      ]);
-    //queryline.patch_style(self.apptheme.selected_ip_bg);
-    querytext.push(queryline);
-
-    let mut queryerror =   Line::from(format!("Status: {}", self.queryerror));
-    queryerror.patch_style(self.apptheme.default_background);
-    querytext.push(queryerror);
-
-    let querybox = Paragraph::new(querytext)
-    .set_style(Style::default())
-    .block(Block::default()
-    .bg(self.apptheme.colors.lblack)
-    .borders(Borders::ALL)
-    .title("Query"));
-    querybox
-
-  }
-
   fn popup_ban(&mut self)-> impl Widget + '_ {
 
     let querycursor = self.anim_querycursor.state.selected().unwrap();
@@ -539,7 +334,6 @@ impl<'a> Home<'a> {
 
   }
 
-
   fn add_to_ipstring(&mut self, ch: char) {
     self.ipstring.push(ch);
   }
@@ -565,8 +359,6 @@ impl<'a> Home<'a> {
     }
     false
   }
-
-
 
   fn toggle_f2bwatcher(&mut self, action_idx: usize) -> Action {
     // check if is active
@@ -600,53 +392,9 @@ impl<'a> Home<'a> {
     self.stored_styled_iostreamed.items = vec![];
   }
 
-  fn create_clearlist_popup(&self)  -> impl Widget + '_  {
-
-    let mut clearlisttext: Vec<Line> = vec![];
-    let clearlistline =   Line::from(vec![
-      Span::styled(format!("Press "), self.apptheme.default_text_style), 
-      Span::styled(format!("Y | y "), Style::default().fg(self.apptheme.colors.accent_lime)),
-      Span::styled(format!("to confirm or "), self.apptheme.default_text_style),
-      Span::styled(format!("N | n "), Style::default().fg(self.apptheme.colors.accent_orange)),
-      Span::styled(format!("to cancel."), self.apptheme.default_text_style),
-      ]);
-    //clearlistline.patch_style(self.apptheme.selected_ip_bg);
-    clearlisttext.push(clearlistline);
-
-    let clearlistbox = Paragraph::new(clearlisttext)
-    .set_style(Style::default())
-    .block(Block::default()
-    .bg(self.apptheme.colors.lblack)
-    .borders(Borders::ALL)
-    .title("Confirm to clear list"));
-    clearlistbox
-
-  }
-
   fn set_io_capacity_to(&mut self, new_capacity:usize) {
     self.iostreamed_capacity = new_capacity;
-  }
-
-  fn popup_set_io_capacity(&self) -> impl Widget + '_ {
-
-    let capacitycursor = self.anim_querycursor.state.selected().unwrap();
-    let capacitycursor = self.anim_querycursor.keyframes[capacitycursor];
-
-    let mut capacitytext: Vec<Line> = vec![];
-    let capacityline =   Line::from(vec![
-      Span::styled(format!("New Capacity: {}", self.iostreamed_capacity_input), self.apptheme.selected_ip_bg) , 
-      Span::styled(capacitycursor, self.apptheme.fail2ban_bg)
-      ]);
-    //capacityline.patch_style(self.apptheme.selected_ip_bg);
-    capacitytext.push(capacityline);
-
-    let capacitybox = Paragraph::new(capacitytext)
-    .set_style(Style::default())
-    .block(Block::default()
-    .bg(self.apptheme.colors.lblack)
-    .borders(Borders::ALL)
-    .title("Set I/O Stream capacity"));
-    capacitybox
+    self.stored_styled_iostreamed.trim_to_length(self.iostreamed_capacity);
   }
 
   fn add_to_capacitystring(&mut self, ch: char) {
@@ -676,93 +424,6 @@ impl<'a> Home<'a> {
         break;
       }
     }
-  }
-
-
-  /// Styles the incoming lines from either journalctl or fail2ban log.
-  /// Fail2Ban may send a String that contains multiple lines which are delimited by "++++".
-  /// Styled lines (saved in self.stored_styled_iostreamed) contain colored substrings / words.
-  pub fn style_incoming_message(&mut self, msg: String) {
-    let mut dbg: String;
-
-    let mut last_io = String::from("Journal");
-    self.last_username = String::from("");
-
-    if msg.contains("++++") {
-      // message is from Fail2Ban
-      last_io = String::from("Fail2Ban");
-    }
-    let collected: Vec<&str> = msg.split("++++").collect(); // new line delimiter in received lines, if more than one got added simultaneously
-    self.debug_me = collected.clone().len().to_string();
-    //self.debug_me = collected.clone().len().to_string();
-
-    for tmp_line in collected {
-      if tmp_line.is_empty() {
-        continue;
-      }
-      let mut thisline: StyledLine = StyledLine::default();
-      // do word_map matching first then regex match splitting
-      // look for ip quickly to send it out to the list
-      let results: Vec<&str> = self.apptheme.ipregex
-      .captures_iter(tmp_line)
-      .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
-      .collect();
-      let mut cip: &str = "";
-      if !results.is_empty() {
-        cip = results[0];
-      }
-
-
-      let words: Vec<&str> = tmp_line.split(" ").collect();
-      let mut held_unstyled_words: Vec<&str> = vec![];
-      let mut last_word: &str= "";
-
-      for word in words.clone(){
-        let mut word_style = self.apptheme.word_style_map.get_style_or_default(word.to_string()); // Detector for constant word
-        if word_style == Style::default() {
-          // try regex styling on word
-          word_style = self.apptheme.regex_style_map.get_style_or_default(word.to_string()); // Detector for regex
-        } 
-        if last_word == "user" {
-          word_style = self.apptheme.username_style;
-          self.last_username = word.to_string();
-        }
-        
-
-        if word_style == Style::default() {
-          // If no detector has returned any styling
-          held_unstyled_words.push(word);
-        }
-        else {
-          // word is styled
-          // if there are any held words push them with default style and reset held words
-          if held_unstyled_words.len() > 0 {
-
-            thisline.words.push((format!(" {}", held_unstyled_words.join(" ")), self.apptheme.default_text_style));
-            held_unstyled_words = vec![];
-          }
-          // push styled word with space in front - TODO word is in first position
-          thisline.words.push((format!(" {}", word.to_string()), word_style));
-
-        }
-        last_word = word;
-
-        // terminate
-        if &word == words.last().unwrap() {
-          thisline.words.push((format!(" {}",held_unstyled_words.join(" ")), self.apptheme.default_text_style));
-        }
-        
-
-      }
-
-      
-      
-      //self.stored_styled_lines.push(thisline);
-      self.stored_styled_iostreamed.items.push((thisline, last_io.clone(), cip.to_string()));
-      self.stored_styled_iostreamed.trim_to_length(self.iostreamed_capacity);
-
-    }// end per line
-
   }
 
 }
@@ -816,7 +477,6 @@ impl Component for Home<'_> {
         },
         _ => {},
       };
-  
       action = match self.mode {
         Mode::Processing => return Ok(None),
         Mode::Normal => {
@@ -851,10 +511,11 @@ impl Component for Home<'_> {
             KeyCode::Right | KeyCode::Enter => {
               let action_idx = self.available_actions.state.selected().unwrap();
               match self.available_actions.items[action_idx].0 {
-                "Ban" => {Action::RequestBan},
+                "Ban" => {if self.displaymode == DisplayMode::Ban {return Ok(Some(Action::ExitBan))} else {return Ok(Some(Action::EnterBan))}},
+                "Unban" => {if self.displaymode == DisplayMode::Unban {return Ok(Some(Action::ExitUnban))} else {return Ok(Some(Action::EnterUnban))}},
                 "monitor-fail2ban" => {self.toggle_f2bwatcher(action_idx)},
                 "monitor-journalctl" => {self.toggle_jctlwatcher(action_idx)},
-                "Stats" => {Action::Blank}, // TODO
+                "Stats" => {return Ok(Some(Action::StatsShow))},
                 "Query" => {if self.displaymode == DisplayMode::Query {Action::ExitQuery} else {Action::EnterQuery}},
                 "Help" => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} Action::Blank},
                 "Exit" => {Action::Quit},
@@ -986,8 +647,8 @@ impl Component for Home<'_> {
             Action::Blank
           },
         }      
-      },
-      Mode::Unban => {  match key.code {
+        },
+        Mode::Unban => {  match key.code {
         KeyCode::Tab => {self.displaymode = DisplayMode::Normal; 
         match self.last_mode {
           Mode::Normal => {Action::EnterNormal},
@@ -1021,7 +682,7 @@ impl Component for Home<'_> {
           Action::Blank
         },
       }      
-    },
+        },
       };
     }
    
@@ -1037,18 +698,28 @@ impl Component for Home<'_> {
       Action::EnterTakeAction => {self.mode = Mode::TakeAction; self.last_mode = self.mode;},
       Action::EnterProcessing => { self.mode = Mode::Processing;}, // self.last_mode = self.mode;
       Action::ExitProcessing => {self.mode = self.last_mode;}, // TODO: Last mode, solved? No we have to look into the future to see if we want to change to same again and then forgo that
-      Action::EnterQuery => {self.last_mode = self.mode; self.mode = Mode::Query; self.displaymode = DisplayMode::Query;}
-      Action::ExitQuery => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
-      Action::EnterBan => {self.last_mode = self.mode; self.mode = Mode::Ban; self.iperror = String::default(); self.displaymode = DisplayMode::Ban;}
-      Action::ExitBan => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
-      Action::EnterUnban => {self.last_mode = self.mode; self.mode = Mode::Unban; self.iperror = String::default(); self.displaymode = DisplayMode::Unban;}
-      Action::ExitUnban => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
+      Action::EnterQuery => {self.last_mode = self.mode; self.mode = Mode::Query; self.displaymode = DisplayMode::Query;},
+      Action::ExitQuery => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
+      Action::EnterBan => {self.last_mode = self.mode; self.mode = Mode::Ban; self.iperror = String::default(); self.displaymode = DisplayMode::Ban;},
+      Action::ExitBan => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
+      Action::EnterUnban => {self.last_mode = self.mode; self.mode = Mode::Unban; self.iperror = String::default(); self.displaymode = DisplayMode::Unban;},
+      Action::ExitUnban => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
+      Action::InternalLog(x) => {self.internal_logs.items.push(x); self.internal_logs.trim_to_length(10); self.internal_logs.next();},
+      Action::StartupGotHome(x) => {
+        let lat = x.lat.clone().parse::<f64>().unwrap();
+        let lon = x.lon.clone().parse::<f64>().unwrap();
+        self.home_lon = lon; self.home_lat = lat;
+        self.last_lon = lon; self.last_lat = lat;
 
+        let tx = self.command_tx.clone().unwrap();
+        tx.send(Action::InternalLog(format!(" ✓ Got home: {}, {}", x.city, x.country)))?;
+
+      }
 
       //General
-      Action::ConfirmClearLists => {self.last_mode = self.mode; self.mode = Mode::ConfirmClear; self.displaymode = DisplayMode::ConfirmClear;}
-      Action::AbortClearLists => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
-      Action::ConfirmedClearLists => { self.clear_lists(); self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;}
+      Action::ConfirmClearLists => {self.last_mode = self.mode; self.mode = Mode::ConfirmClear; self.displaymode = DisplayMode::ConfirmClear;},
+      Action::AbortClearLists => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
+      Action::ConfirmedClearLists => { self.clear_lists(); self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
       Action::SetCapacity => {self.last_mode = self.mode; self.mode = Mode::SetIOCapacity; self.displaymode = DisplayMode::SetIOCapacity;},
       Action::SubmittedCapacity => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
       Action::SelectTheme(x) => {self.select_new_theme(x)},
@@ -1097,62 +768,7 @@ impl Component for Home<'_> {
       Action::QueryNotFound(x) => {self.queryerror = format!("IP not found: {}", x);},
       Action::SubmitQuery(x) => {self.querystring = String::from("") ;self.queryerror = format!("Querying IP: {}", x);},
 
-      Action::GotGeo(x,y, z) => {
-
-        self.style_incoming_message(y.clone());
-
-        let cip = x.ip.clone();
-
-        let cipvec = self.iplist.items.clone();
-
-        if !cipvec.iter().any(|i| i.IP.ip==cip) {
-          // if cip isnt in vector yet
-          let lat = x.lat.clone().parse::<f64>().unwrap();
-          let lon = x.lon.clone().parse::<f64>().unwrap();
-          let dir_lat = self.home_lat - lat;
-          let dir_lon = self.home_lon - lon;
-
-          self.last_lat = lat.clone();
-          self.last_lon = lon.clone();
-  
-          self.last_direction = (dir_lon, dir_lat);
-
-          let pointdata = PointData::new(cip.clone(), lon, lat, dir_lon, dir_lat);
-
-          let iplistitem = IPListItem::new(x.clone(), self.last_username.clone(), pointdata);
-
-          //self.iplist.items.push((cip.clone(), x.clone(), self.last_username.clone()));
-          self.iplist.items.push(iplistitem);
-          self.iplist.trim_to_length(self.iplist_capacity); // change to const
-
-          if self.iomode == IOMode::Follow {
-            if self.iplist.items.len() > 1 {
-              self.iplist.state.select(Option::Some(self.iplist.items.len()-1));
-            }
-            else {
-              self.iplist.state.select(Option::Some(0));
-            }
-  
-            self.selected_ip = cip;
-          }
-
-          
-        } 
-        else {
-          // ip is already in vector, need to select it again if IOmode is follow
-          if self.iomode == IOMode::Follow {
-            for i in 0..self.iplist.items.len() {
-              let item = &self.iplist.items[i];
-              if item.IP.ip == cip {
-                self.iplist.state.select(Some(i));
-                self.iplist.items[i].pointdata.refresh();
-                self.selected_ip = cip;
-                break;
-              }
-            }
-          }
-        }    
-      },
+      Action::PassGeo(x,y, z) => {parse_passed_geo(self, x.clone(), y.clone(), z)?;},
 
       // Stats
       Action::StatsShow => {self.showing_stats = true;},
@@ -1193,15 +809,14 @@ impl Component for Home<'_> {
           //todo!()
         }
       },
-
       Action::Banned(x) => {
         if x {self.infotext = String::from("BANNED");
-        list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitBan);
-      }
+          list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitBan);
+        }
       },
       Action::Unbanned(x) => {
         if x {self.infotext = String::from("BANNED");}
-        list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitUnban);
+          list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitUnban);
       },
       _ => {},
     }
@@ -1247,187 +862,14 @@ impl Component for Home<'_> {
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(layout[1]);
   
-      let av_actions: Vec<ListItem> = self
-      .available_actions
-      .items
-      .iter()
-      .map(|i| {
-          let mut lines = vec![Line::from(i.0)];
-          if i.0 == "Ban" || i.0 == "Unban"
-          {
-            lines.push(
-              format!("X - {}", self.selected_ip)
-                  .italic()
-                  .into(),
-            );          
-          }
-          else {
-            let mut symb = "X";
-            if i.1 == String::from("active") {
-              symb = "✓";
-            }
-            lines.push(
-                format!("{} - {}", symb, i.1)
-                .italic()
-                .into(),
-            );            
-          }
+      let actionlist = ui::create_action_list(self.available_actions.clone(), &self.apptheme, self.mode, self.last_mode, self.selected_ip.clone());
   
-  
-          ListItem::new(lines).style(self.apptheme.default_text_style)
-      })
-      .collect();
-  
-      // Create a List from all list items and highlight the currently selected one
-      let actionlist = List::new(av_actions)
-          .bg(self.apptheme.colors.lblack)
-          .block(Block::default()
-          .borders(Borders::ALL)
-          .border_style( 
-            match self.mode {
-              Mode::TakeAction => {self.apptheme.active_border_style},
-              _ => {  let mut style = self.apptheme.border_style;
-                if self.last_mode == Mode::TakeAction {style = self.apptheme.active_border_style}
-                style},
-            })
-          .title("Actions"))
-          .highlight_style(self.apptheme.highlight_item_style)
-          .highlight_symbol(">> ");
-  
-  
-      let ips: Vec<ListItem> = self
-      .iplist      // .items
-      .items
-      .iter()
-      .map(|i| {
-          let mut lines = vec![Line::from(format!("{}   {}", i.IP.ip, i.username))]; // let mut lines = vec![Line::from(i.0)];
-          let mut symb = "X";
-          if i.IP.is_banned  {
-            symb = "✓";
-          }
-          lines.push(
-            format!("{} - {}, {}", symb, i.IP.city, i.IP.country)
-                .italic()
-                .into(),
-          );
-          ListItem::new(lines).style(self.apptheme.default_text_style)
-      })
-      .collect();
-  
-      // Create a List from all list items and highlight the currently selected one
-      let iplist = List::new(ips)
-          .bg(self.apptheme.colors.lblack)
-          .block(Block::default()
-          .borders(Borders::ALL)
-          .border_style( 
-            match self.mode {
-              Mode::Normal => {self.apptheme.active_border_style},
-              _ => {  let mut style = self.apptheme.border_style;
-                if self.last_mode == Mode::Normal {style = self.apptheme.active_border_style}
-                style},
-            })
-          .title("Last IPs"))
-          .highlight_style(self.apptheme.highlight_item_style)
-          .highlight_symbol(">> ");
-  
-        let term_w = right_layout[1].width as usize;
-  
-        //self.styledio == old
-        let iolines: Vec<ListItem> = self
-          .stored_styled_iostreamed
-          .items 
-          .iter()
-          .map(|i| {
-  
-            let mut line: Line = Line::default();
-            for word in i.0.words.clone() {
-              let cspan = Span::styled(word.0, word.1); 
-              line.spans.push(cspan);
-            }
+      let iplist = ui::create_ip_list(self.iplist.clone(), &self.apptheme, self.mode, self.last_mode);
 
-            let mut bg_style: Style;
-            if i.1 == "Journal" {
-              bg_style = self.apptheme.journal_bg;
-            } else {
-              bg_style = self.apptheme.fail2ban_bg;
-            }
-
-            if i.2 == self.selected_ip {
-              bg_style = self.apptheme.selected_ip_bg;
-            }
-
-            let line_w = line.width();
-            if line_w < term_w {
-              // fill line with whitespaces
-              let dif = term_w - line_w;
-              let cspan = Span::styled(str::repeat(" ", dif), self.apptheme.default_text_style); 
-              line.spans.push(cspan);
+      let term_w = right_layout[1].width as usize;
   
-            }
-            line.patch_style(bg_style);
-            ListItem::new(line)
-          })
-          .collect();
-
-        let mut ioactive: u8 = 0;
-        if self.available_actions.items[2].1 == "active" || self.available_actions.items[3].1 == "active" {
-          if self.available_actions.items[2].1 == "active" && self.available_actions.items[3].1 == "active" {
-            ioactive = 2;
-          } else{
-            ioactive = 1;
-          }
-        }
-  
-  
-        let iolist_title = Line::from(vec![
-          Span::styled(" I/O Stream [ ", self.apptheme.default_text_style),
-          Span::styled(animsymbols[self.elapsed_rticks],
-            match ioactive { 0 => {Style::default().fg(self.apptheme.colors.accent_wred)}, 1 => {Style::default().fg(self.apptheme.colors.accent_lpink)}, 2 => {Style::default().fg(self.apptheme.colors.accent_blue)} _ => {Style::default().fg(self.apptheme.colors.accent_wred)}}),
-          Span::styled(" ] ", self.apptheme.default_text_style),
-        ]);
-  
-        let iolist_selected_idx = self.stored_styled_iostreamed.state.selected();
-        let selected_symb = if iolist_selected_idx.is_some() { let selnum = iolist_selected_idx.unwrap() + 1;
-          selnum.to_string()} else {String::from("-")};
-        let ciolist_len = self.stored_styled_iostreamed.items.len();
-        let list_capacity_diff = self.iostreamed_capacity - ciolist_len; 
-        
-        let capacity_color = if list_capacity_diff < 10 {self.apptheme.colors.accent_blue} else if list_capacity_diff == 0 {self.apptheme.colors.accent_orange} else {Color::White};
-
-
-        let iolist_capacity_display = Line::from(vec![
-          Span::styled(format!("[ "), self.apptheme.default_text_style),
-          Span::styled(format!("{}", selected_symb), Style::default().fg(self.apptheme.colors.accent_blue)), // selected
-          Span::styled(format!(" : "), self.apptheme.default_text_style), // separator
-          Span::styled(format!("{}", ciolist_len), Style::default().fg(capacity_color)), // current num
-          Span::styled(format!(" / ", ), self.apptheme.default_text_style), // separator
-          Span::styled(format!("{}", self.iostreamed_capacity), Style::default().fg(capacity_color)), // capacity
-          Span::styled(format!(" ]"), self.apptheme.default_text_style),
-        ]); 
-
-        // Create a List from all list items and highlight the currently selected one
-        let iolist = List::new( iolines) //self.styledio.clone()
-            .block(Block::default()
-              .bg(self.apptheme.colors.lblack)
-              .borders(Borders::ALL)
-              .border_style( 
-                match self.mode {
-                  Mode::Normal => {Style::new().white()},
-                  _ => Style::new().white(),
-                })
-              .title(block::Title::from(iolist_title).alignment(Alignment::Left))
-              .title(block::Title::from(iolist_capacity_display).alignment(Alignment::Right))
-            )
-            //.highlight_style(self.apptheme.highlight_item_style)
-            .highlight_symbol(">> ");
-  
-        
-        let infoblock = Paragraph::new(format!("Received I/O: {} -{}-numLinesLast- dbg-msg:   {}",self.infotext.clone(), self.elapsed_notify.to_string(), self.debug_me))
-          .set_style(Style::default())
-          .block(Block::default()
-          .bg(self.apptheme.colors.lblack)
-          .borders(Borders::ALL)
-          .title("Info"));
+      let iolist = ui::create_io_list(self.stored_styled_iostreamed.clone(), 
+        self.iostreamed_capacity, &self.apptheme, term_w, self.available_actions.clone(), self.selected_ip.clone(), self.elapsed_rticks.clone());
   
       // Draw Map to right_upper = 0
       f.render_widget(self.map_canvas(&right_layout[0]), right_layout[0]);
@@ -1436,7 +878,7 @@ impl Component for Home<'_> {
       f.render_stateful_widget(iolist, right_layout[1], &mut self.stored_styled_iostreamed.state); // CHANGED 
       // f.render_widget(iolist, right_layout[1]);
       
-      f.render_widget(infoblock, left_layout[0]);
+      f.render_widget(create_internal_logs(self), left_layout[0]);
   
       f.render_stateful_widget(iplist, left_layout[1], &mut self.iplist.state);
   
@@ -1445,38 +887,38 @@ impl Component for Home<'_> {
       // display popups/overlays
       match self.displaymode {
         DisplayMode::Help => {
-          let p_area = self.centered_rect(f.size(), 35, 45);
+          let p_area = centered_rect(f.size(), 35, 45);
           f.render_widget(Clear, p_area);
-          f.render_widget(self.create_help_popup(),p_area);
+          f.render_widget(ui::create_help_popup(self),p_area);
           },
         DisplayMode::Query => {
           self.anim_querycursor.next();
-          let p_area = self.centered_rect(f.size(), 20, 7);
+          let p_area = centered_rect(f.size(), 20, 7);
           f.render_widget(Clear, p_area);
-          f.render_widget(self.create_query_popup(),p_area);
+          f.render_widget(ui::create_query_popup(self),p_area);
         },
         DisplayMode::Stats => {},
 
         DisplayMode::ConfirmClear => {
-          let p_area = self.centered_rect(f.size(), 20, 5);
+          let p_area = centered_rect(f.size(), 20, 5);
           f.render_widget(Clear, p_area);
-          f.render_widget(self.create_clearlist_popup(),p_area);
+          f.render_widget(ui::create_clearlist_popup(&self.apptheme),p_area);
         },
         DisplayMode::SetIOCapacity => {
           self.anim_querycursor.next();
-          let p_area = self.centered_rect(f.size(), 20, 5);
+          let p_area = centered_rect(f.size(), 20, 5);
           f.render_widget(Clear, p_area);
-          f.render_widget(self.popup_set_io_capacity() ,p_area);
+          f.render_widget(ui::popup_set_io_capacity(self.anim_querycursor.clone(), &self.apptheme, self.iostreamed_capacity_input.clone()) ,p_area);
         },
         DisplayMode::Ban => {
           self.anim_querycursor.next();
-          let p_area = self.centered_rect(f.size(), 20, 7);
+          let p_area = centered_rect(f.size(), 20, 7);
           f.render_widget(Clear, p_area);
           f.render_widget(self.popup_ban() ,p_area)
         },
         DisplayMode::Unban => {
           self.anim_querycursor.next();
-          let p_area = self.centered_rect(f.size(), 20, 7);
+          let p_area = centered_rect(f.size(), 20, 7);
           f.render_widget(Clear, p_area);
           f.render_widget(self.popup_unban() ,p_area)
         },
@@ -1504,13 +946,7 @@ impl Component for Home<'_> {
       }
     }
 
-
-
     Ok(())
   }
 
-  
-
-
 }
-

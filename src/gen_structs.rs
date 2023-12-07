@@ -3,7 +3,7 @@ use serde::Serialize;
 use ratatui::{prelude::*, widgets::*};
 
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct StatefulList<T> {
   pub state: ListState,
   pub items: Vec<T>,

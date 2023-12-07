@@ -76,8 +76,11 @@ pub enum Action {
 
   // second string is the line, bool is if it came from IO or DB
   GotGeo(IP, String, bool),
+  //
+  /// 0: IP, 1: Line, 2: true if from DB, false if fresh
+  PassGeo(IP, String, bool),
 
-
+  InternalLog(String),
   // Ban Actions
   EnterBan,
   ExitBan,
@@ -106,6 +109,7 @@ pub enum Action {
   StartupConnectedDB,
   StartupCreateDB,
   StartupDone,
+  StartupGotHome(IP),
   // Select Theme, by themename by i dont know how to send an enum through another enum
   SelectTheme(String),
 

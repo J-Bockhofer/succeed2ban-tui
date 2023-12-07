@@ -85,34 +85,6 @@ impl App {
 
     let mut jctl_sender: Option<mpsc::UnboundedSender<bool>>= Option::None;
 
-    // try make filereader here?
-/*     let action_tx2 = action_tx.clone();
-    let action_tx3 = action_tx.clone();
-
-
-    let _filewatcher = tokio::spawn(async move  {
-      
-        let path = String::from("/var/log/fail2ban.log"); // easy test "/home/projects/ratui/text.txt" // /var/log/fail2ban.log
-        //println!("now running on a worker thread");
-
-        // bog standard polling file reader after
-        // https://stackoverflow.com/questions/71632833/how-to-continuously-watch-and-read-file-asynchronously-in-rust-using-tokio
-        //let _resp = tasks::follow_file(&path, action_tx2.clone()).await;
-
-        // Notify interface CPU problems
-        let _resp = tasks::notify_change(&path, action_tx2.clone()).await.unwrap_or_else(|err| {
-          action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
-        });
-      }); */
-
-/*     let path = String::from("/home/projects/ratui/text.txt");
-    let _resp = tasks::notify_change(&path, action_tx2.clone()).await.unwrap_or_else(|err| {
-      action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
-    });  */   
-
-
-
-
     let mut tui = tui::Tui::new()?.tick_rate(self.tick_rate).frame_rate(self.frame_rate);
     // tui.mouse(true);
     tui.enter()?;
@@ -208,6 +180,9 @@ impl App {
               // start the fail2ban watcher
               let action_tx2 = action_tx.clone();
               let action_tx3 = action_tx.clone();
+              let action_tx4 = action_tx.clone();
+
+
 
               self.f2b_cancellation_token.cancel();
               tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // make sure we're wound down
@@ -240,22 +215,10 @@ impl App {
                     }
                   }
 
-                  //let _resp = tasks::notify_change(&path, action_tx2, _rx).await.unwrap_or_else(|err| {
-                  //  action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
-                  //});
-                  //let path = String::from("/var/log/fail2ban.log"); // easy test "/home/projects/ratui/text.txt" // /var/log/fail2ban.log
-                  //println!("now running on a worker thread");
-
-                  // bog standard polling file reader after
-                  // https://stackoverflow.com/questions/71632833/how-to-continuously-watch-and-read-file-asynchronously-in-rust-using-tokio
-                  //let _resp = tasks::follow_file(&path, action_tx2.clone()).await;
-
-                  // Notify interface CPU higher but no polling shit and more stuff handled thanks
-                  //let _resp = tasks::notify_change(&path, action_tx2).await.unwrap_or_else(|err| {
-                  //  action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
-                  //});
                 });
 
+                let fetchmsg = format!(" ✔ STARTED fail2ban watcher");
+                action_tx4.send(Action::InternalLog(fetchmsg)).expect("LOG: StartF2BWatcher message failed to send");
             },
 
           Action::StopF2BWatcher => {
@@ -267,7 +230,8 @@ impl App {
               std::thread::sleep(std::time::Duration::from_millis(10));
               action_tx.clone().send(Action::StopF2BWatcher).unwrap();
             }
-
+            let fetchmsg = format!(" ❌ STOPPED fail2ban watcher");
+            action_tx.clone().send(Action::InternalLog(fetchmsg)).expect("LOG: StopF2BWatcher message failed to send");
  /*            if let Some(handle) = self.f2bw_handle.take()  {
               // should be more graceful
               
