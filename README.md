@@ -28,7 +28,7 @@ Watch your logs the right way.
 
 2. Start
 
-3. Start fail2ban and/ journalctl watcher
+3. Start fail2ban and/or journalctl watcher
 
 4. Watch
 
@@ -43,9 +43,9 @@ Succeed2Ban monitors journalctl and fail2ban ssh logs.
 It fetches geodata for incoming IPs from [ip-api.com](https://ip-api.com/). 
 Stores geodata in a SQLite file in order to keep necessary requests to a minimum and to review log statistics.
 
-But in all honesty, this is more of an overinflated cMatrix. So enjoy your CPU cycles :)
+But in all honesty, this is more of an overinflated cMatrix with tail -f on top. So enjoy your CPU cycles :)
 
-
+If people do find this useful I would consider adding something that actually helps with setting up fail2ban itself!
 
 
 [![CI](https://github.com//ratui/workflows/CI/badge.svg)](https://github.com//ratui/actions)

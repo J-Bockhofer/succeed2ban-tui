@@ -10,6 +10,7 @@ use serde::{
   Deserialize, Serialize,
 };
 
+//pub enum 
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -42,12 +43,12 @@ pub enum Action {
 
   // List state actions
   // -- LOG LIST -- iostreamed
-  LogsScheduleNext,
-  LogsSchedulePrevious,
+  //LogsScheduleNext,
+  //LogsSchedulePrevious,
   LogsNext,
   LogsPrevious,
-  LogsScheduleFirst,
-  LogsScheduleLast,
+  //LogsScheduleFirst,
+  //LogsScheduleLast,
   LogsFirst,
   LogsLast,
   // -- IP LIST -- iplist

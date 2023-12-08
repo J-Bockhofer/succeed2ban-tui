@@ -46,7 +46,7 @@ pub fn style_incoming_message(home: &mut Home, msg: String) {
         word_style = home.apptheme.regex_style_map.get_style_or_default(word.to_string()); // Detector for regex
       } 
       if last_word == "user" {
-        word_style = home.apptheme.username_style;
+        word_style = Style::default().fg(home.apptheme.colors_app.accent_color_a.color);
         home.last_username = word.to_string();
       }
       
@@ -60,7 +60,7 @@ pub fn style_incoming_message(home: &mut Home, msg: String) {
         // if there are any held words push them with default style and reset held words
         if held_unstyled_words.len() > 0 {
 
-          thisline.words.push((format!(" {}", held_unstyled_words.join(" ")), home.apptheme.default_text_style));
+          thisline.words.push((format!(" {}", held_unstyled_words.join(" ")), Style::default().fg(home.apptheme.colors_app.text_color.color)));
           held_unstyled_words = vec![];
         }
         // push styled word with space in front - TODO word is in first position
@@ -71,7 +71,7 @@ pub fn style_incoming_message(home: &mut Home, msg: String) {
 
       // terminate
       if &word == words.last().unwrap() {
-        thisline.words.push((format!(" {}",held_unstyled_words.join(" ")), home.apptheme.default_text_style));
+        thisline.words.push((format!(" {}",held_unstyled_words.join(" ")), Style::default().fg(home.apptheme.colors_app.text_color.color)));
       }
       
 

@@ -1,8 +1,7 @@
 
 use regex::Regex;
 //let re = Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).unwrap();
-#[tokio::main]
-async fn main() {
+fn main() {
 
     // 2023-11-23 05:15:20,065 fail2ban.ipdns          [836]: WARNING Unable to find a corresponding IP address for whitelist-IP: [Errno -2] Name or service not known
     // 2023-11-23 05:30:26,385 fail2ban.filter         [836]: INFO    [sshd] Found 1.12.60.11 - 2023-11-23 05:30:26

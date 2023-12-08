@@ -9,3 +9,12 @@ pub async fn fetch_geolocation(ip: &str) -> Result<serde_json::Value, Box<dyn st
     Ok(resp) 
 
 }
+
+pub async fn fetch_home() -> Result<String, Box<dyn std::error::Error>>{
+    let url = format!("https://ident.me/");
+    let resp = reqwest::get(url)
+        .await?;
+    let text = resp.text().await.unwrap();
+    //println!("{:#?}", resp);
+    Ok(text)  
+  }

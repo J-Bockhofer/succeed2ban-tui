@@ -274,9 +274,9 @@ impl App {
                   });
                 });
               self.jctl_handle = Option::Some(journalwatcher);
+              let fetchmsg = format!(" ✔ STARTED journalctl watcher");
+              action_tx.clone().send(Action::InternalLog(fetchmsg)).expect("LOG: StartJCTLWatcher message failed to send");
             }
-
-
           },
           Action::StopJCtlWatcher => {
             if let Some(jctl_sender) = jctl_sender.take()  {
@@ -303,6 +303,8 @@ impl App {
                   break;
                 }
               }
+              let fetchmsg = format!(" ❌ STOPPED journalctl watcher");
+              action_tx.clone().send(Action::InternalLog(fetchmsg)).expect("LOG: StopJCTLWatcher message failed to send");
 
 
             }

@@ -47,13 +47,23 @@ pub fn create_io_list<'a>(
 
       let mut bg_style: Style;
       if i.1 == "Journal" {
-        bg_style = Style::default().bg(theme.colors_app.background_darkest.color);
+        if theme.is_light {
+          bg_style = Style::default().bg(theme.colors_app.background_darkest.shade(-0.16));
+         } else {
+          bg_style = Style::default().bg(theme.colors_app.background_darkest.color);
+        }
+        
       } else {
         bg_style = Style::default().bg(theme.colors_app.background_text_bright.color);
       }
 
       if i.2 == selected_ip {
-        bg_style = Style::default().bg(theme.colors_app.background_text_dark.color);
+        if theme.is_light {
+          bg_style = Style::default().bg(theme.colors_app.background_text_bright.color);
+        } else {
+          bg_style = Style::default().bg(theme.colors_app.background_text_dark.color);
+        }
+        
       }
 
       let line_w = line.width();
@@ -76,19 +86,19 @@ pub fn create_io_list<'a>(
       ioactive = 1;
     }
   }
-
+  let default_text_style = Style::default().fg(theme.colors_app.text_color.color);
   let iolist_title = Line::from(vec![
-    Span::styled(" I/O Stream [ ", theme.default_text_style),
+    Span::styled(" I/O Stream [ ", default_text_style),
     Span::styled(
       ANIMSYMBOLS[elapsed_rticks],
       match ioactive {
-        0 => Style::default().fg(theme.colors.accent_wred),
-        1 => Style::default().fg(theme.colors.accent_lpink),
-        2 => Style::default().fg(theme.colors.accent_blue),
-        _ => Style::default().fg(theme.colors.accent_wred),
+        0 => Style::default().fg(theme.colors_app.warn_color.color),
+        1 => Style::default().fg(theme.colors_app.error_color.color),
+        2 => Style::default().fg(theme.colors_app.accent_color_b_mid.color),
+        _ => Style::default().fg(theme.colors_app.warn_color.color),
       },
     ),
-    Span::styled(" ] ", theme.default_text_style),
+    Span::styled(" ] ", default_text_style),
   ]);
 
   let iolist_selected_idx = st_st_io.state.selected();
@@ -102,29 +112,31 @@ pub fn create_io_list<'a>(
   let list_capacity_diff = iostreamed_capacity - ciolist_len;
 
   let capacity_color = if list_capacity_diff < 10 {
-    theme.colors.accent_blue
-  } else if list_capacity_diff == 0 {
-    theme.colors.accent_orange
+    if list_capacity_diff == 0 {
+      theme.colors_app.accent_color_a.color
+    } else {
+      theme.colors_app.accent_color_b_mid.color
+    }
   } else {
-    Color::White
+    theme.colors_app.text_color.color
   };
 
   let iolist_capacity_display = Line::from(vec![
-    Span::styled(format!("[ "), theme.default_text_style),
-    Span::styled(format!("{}", selected_symb), Style::default().fg(theme.colors.accent_blue)), // selected
-    Span::styled(format!(" : "), theme.default_text_style),                                    // separator
+    Span::styled(format!("[ "), default_text_style),
+    Span::styled(format!("{}", selected_symb), Style::default().fg(theme.colors_app.accent_color_b_mid.color)), // selected
+    Span::styled(format!(" : "), default_text_style),                                    // separator
     Span::styled(format!("{}", ciolist_len), Style::default().fg(capacity_color)),             // current num
-    Span::styled(format!(" / ",), theme.default_text_style),                                   // separator
+    Span::styled(format!(" / ",), default_text_style),                                   // separator
     Span::styled(format!("{}", iostreamed_capacity), Style::default().fg(capacity_color)),     // capacity
-    Span::styled(format!(" ]"), theme.default_text_style),
+    Span::styled(format!(" ]"), default_text_style),
   ]);
 
   // Create a List from all list items and highlight the currently selected one
   let iolist = List::new( iolines) //home.styledio.clone()
             .block(Block::default()
-              .bg(theme.colors.lblack)
+              .bg(theme.colors_app.background_darkest.color)
               .borders(Borders::ALL)
-              .border_style(theme.default_text_style)
+              .border_style(default_text_style)
               .title(block::Title::from(iolist_title).alignment(Alignment::Left))
               .title(block::Title::from(iolist_capacity_display).alignment(Alignment::Right))
             )
@@ -233,48 +245,60 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
     IOMode::Static => {"Static"},
   };
 
+  let headerstyle = Style::default().fg(home.apptheme.colors_app.text_color.color).bg(home.apptheme.colors_app.background_text_bright.color);
+  let linestyle = Style::default().fg(home.apptheme.colors_app.text_color.color);
+  let linestyle_alt: Style;
+  if home.apptheme.is_light {
+    linestyle_alt = Style::default().fg(home.apptheme.colors_app.text_color.color).bg(home.apptheme.colors_app.background_mid.shade(0.5));
+  } else {
+    linestyle_alt = Style::default().fg(home.apptheme.colors_app.text_color.color).bg(home.apptheme.colors_app.background_mid.color);
+  }
+  
   // make text
   let mut helptext: Vec<Line> = vec![];
-  let mut hheader =   Line::from(format!("---           HOTKEYS       ---                                                                 -"));
-  hheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
-  helptext.push(hheader);
-  helptext.push(                Line::from(format!("Key:          Name          Info")));
-  let mut hheader =   Line::from(format!("---           General       ---                                                                 -"));
-  hheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
+  helptext.push(                Line::from(Span::styled(format!("Key:          Name          Info"), linestyle)));
+  let mut hheader =   Line::from(                     format!("---           General       ---                                                                 -"));
+  hheader.patch_style(headerstyle);
   helptext.push(hheader);    
-  helptext.push(                Line::from(format!("Arrowkeys:    Select        Select item in IPs or Actions dependent on mode")));
-  helptext.push(                Line::from(format!("Tab:          Mode          Switch Mode between IP-List & Actions")));
-  helptext.push(                Line::from(format!("W|w:          Help          Toggle help")));
-  helptext.push(                Line::from(format!("Q|q:          Query         Toggle query input for IP data from db")));
-  helptext.push(                Line::from(format!("E|e:          Stats         Switch to Stats-Screen")));  
-  helptext.push(                Line::from(format!("C|c:          Clear         Clears IP and I/O Lists")));
-  helptext.push(                Line::from(format!("Enter:        Execute       Context dependent selection or execution")));
-  let mut hheader =   Line::from(format!("---           Drawmode      ---                                           {}                -", active_drawmode)); // for more spaces bc inserted string has six characters
-  hheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
+  helptext.push(                Line::from(Span::styled(format!("Arrowkeys:    Select        Select item in IPs or Actions dependent on mode"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("Tab:          Mode          Switch Mode between IP-List & Actions"), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!("W|w:          Help          Toggle help"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("Q|q:          Query         Toggle query input for IP data from db"), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!("B|b:          Ban           Ban entered IP"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("U|u:          Unban         Unban entered IP"), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!("E|e:          Stats         Switch to Stats-Screen"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("T|t:          Logs          Maximizes Logs"), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!("M|m:          Map           Maximizes Map"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("C|c:          Clear         Clears IP and I/O Lists"), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!("Enter:        Execute       Context dependent selection or execution"), linestyle)));
+  let mut hheader =   Line::from(                     format!("---           Drawmode      ---                                           {}                -", active_drawmode)); // for more spaces bc inserted string has six characters
+  hheader.patch_style(headerstyle);
   helptext.push(hheader);
-  helptext.push(                Line::from(format!("A|a:          All           Draws all connections all the time")));
-  helptext.push(                Line::from(format!("S|s:          Sticky        Draws only the selection connection")));
-  helptext.push(                Line::from(format!("D|d:          Decay         Draws each connection for 10 seconds")));
-  let mut ioheader =  Line::from(format!("---           I/O Stream    ---                                 Capacity: {}                -", home.iostreamed_capacity));
-  ioheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
+  helptext.push(                Line::from(Span::styled(format!("A|a:          All           Draws all connections all the time"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("S|s:          Sticky        Draws only the selection connection"), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!("D|d:          Decay         Draws each connection for 10 seconds"), linestyle)));
+  let mut ioheader =  Line::from(                     format!("---           I/O Stream    ---                                 Capacity: {}                -", home.iostreamed_capacity));
+  ioheader.patch_style(headerstyle);
   helptext.push(ioheader);
-  helptext.push(                Line::from(format!("H|h:          First         Select oldest line in I/O Streamed")));
-  helptext.push(                Line::from(format!("J|j:          Previous      Select previous line in I/O Streamed")));
-  helptext.push(                Line::from(format!("K|k:          Next          Select next line in I/O Streamed")));
-  helptext.push(                Line::from(format!("L|l:          Last          Select latest line in I/O Streamed")));
-  helptext.push(                Line::from(format!("N|n:          Unselect      Reset line selection in I/O Streamed")));
-  helptext.push(                Line::from(format!("+|-:          Set Capacity  Input a new capacity for I/O Streamed")));
-  let mut hheader =   Line::from(format!("---           IO-Mode       ---                                           {}                -", active_iomode)); // four more spaces bc inserted string has six characters
-  hheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
+  helptext.push(                Line::from(Span::styled(format!("H|h:          First         Select oldest line in I/O Streamed"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("J|j:          Previous      Select previous line in I/O Streamed"), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!("K|k:          Next          Select next line in I/O Streamed"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("L|l:          Last          Select latest line in I/O Streamed"), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!("P|p:          Unselect      Reset line selection in I/O Streamed"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("+|-:          Set Capacity  Input a new capacity for I/O Streamed"), linestyle_alt)));
+  let mut hheader =   Line::from(                     format!("---           IO-Mode       ---                                           {}                -", active_iomode)); // four more spaces bc inserted string has six characters
+  hheader.patch_style(headerstyle);
   helptext.push(hheader);
-  helptext.push(                Line::from(format!("F|f:          Follow        Auto-selects the last received IP")));
-  helptext.push(                Line::from(format!("G|g:          Static        Selection stays where you left it")));   
+  helptext.push(                Line::from(Span::styled(format!("F|f:          Follow        Auto-selects the last received IP"), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!("G|g:          Static        Selection stays where you left it"), linestyle_alt)));   
 
   let infoblock = Paragraph::new(helptext)
   .set_style(Style::default())
   .block(Block::default()
   .bg(home.apptheme.colors_app.background_darkest.color)
+  .fg(home.apptheme.colors_app.background_text_bright.color)
   .borders(Borders::ALL)
+  .border_style(Style::default().fg(home.apptheme.colors_app.text_color.color))
   .title("Help"));
   infoblock
 
@@ -287,14 +311,14 @@ pub fn create_query_popup<'a>(home: &'a Home)-> impl Widget + 'a {
 
   let mut querytext: Vec<Line> = vec![];
   let queryline =   Line::from(vec![
-    Span::styled(format!("Query: {}", home.querystring), Style::default().bg(home.apptheme.colors_app.background_text_dark.color).fg(home.apptheme.colors_app.text_color.color)) , 
+    Span::styled(format!("Query: {}", home.querystring), Style::default().bg(home.apptheme.colors_app.background_darkest.color).fg(home.apptheme.colors_app.text_color.color)) , 
     Span::styled(querycursor, Style::default().bg(home.apptheme.colors_app.background_brightest.color).fg(home.apptheme.colors_app.text_color.color))
     ]);
   //queryline.patch_style(home.apptheme.selected_ip_bg);
   querytext.push(queryline);
 
   let mut queryerror =   Line::from(format!("Status: {}", home.queryerror));
-  queryerror.patch_style(Style::default().bg(home.apptheme.colors_app.background_mid.color));
+  queryerror.patch_style(Style::default().bg(home.apptheme.colors_app.background_mid.color).fg(home.apptheme.colors_app.text_color.color));
   querytext.push(queryerror);
 
   let querybox = Paragraph::new(querytext)

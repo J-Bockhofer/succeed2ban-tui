@@ -17,9 +17,9 @@ pub fn make_country_list<'a>(stats: &Stats) -> List<'a> {
       let is_blocked = i.0.is_blocked;
       let mut line = Line::from(format!("{}", i.0.name.clone()));
       line.patch_style(if is_blocked {
-        stats.apptheme.default_text_style.bg(stats.apptheme.colors.accent_wred)
+        Style::default().fg(stats.apptheme.colors_app.text_color.color).bg(stats.apptheme.colors_app.warn_color.color)
       } else {
-        stats.apptheme.default_text_style
+        Style::default().fg(stats.apptheme.colors_app.text_color.color)
       });
       ListItem::new(line)
     })
@@ -34,21 +34,21 @@ pub fn make_country_list<'a>(stats: &Stats) -> List<'a> {
   let sort_indicator = make_sort_state_indicator(&stats.apptheme, stats.countries_sort);
   // Create a List from all list items and highlight the currently selected one
   let countrylist: List<'_> = List::new(av_countries)
-    .bg(stats.apptheme.colors.lblack)
+    .bg(stats.apptheme.colors_app.background_darkest.color)
     .block(
       Block::default()
         .borders(Borders::ALL)
         .border_style(match stats.selection_mode {
-          SelectionMode::Country => stats.apptheme.active_border_style,
-          _ => stats.apptheme.border_style,
+          SelectionMode::Country => stats.apptheme.styles_app.active_border_style,
+          _ => stats.apptheme.styles_app.border_style,
         })
         .title(Title::from("Countries").alignment(Alignment::Left))
         .title(Title::from(sort_indicator).alignment(Alignment::Right)),
     )
     .highlight_style(if sel_item.is_blocked {
-      stats.apptheme.highlight_item_style.bg(stats.apptheme.colors.accent_wred).fg(Color::White)
+      stats.apptheme.styles_app.highlight_item_style.bg(stats.apptheme.colors_app.warn_color.color).fg(stats.apptheme.colors_app.text_color.color)
     } else {
-      stats.apptheme.highlight_item_style
+      stats.apptheme.styles_app.highlight_item_style
     })
     .highlight_symbol(">> ");
 
@@ -64,9 +64,9 @@ pub fn make_region_list<'a>(stats: &Stats) -> List<'a> {
       let is_blocked = i.0.is_blocked;
       let mut line = Line::from(format!("{}", i.0.name.clone()));
       line.patch_style(if is_blocked {
-        stats.apptheme.default_text_style.bg(stats.apptheme.colors.accent_wred)
+        Style::default().fg(stats.apptheme.colors_app.text_color.color).bg(stats.apptheme.colors_app.warn_color.color)
       } else {
-        stats.apptheme.default_text_style
+        Style::default().fg(stats.apptheme.colors_app.text_color.color)
       });
       ListItem::new(line)
     })
@@ -79,21 +79,21 @@ pub fn make_region_list<'a>(stats: &Stats) -> List<'a> {
   let sort_indicator = make_sort_state_indicator(&stats.apptheme, stats.regions_sort);
   // Create a List from all list items and highlight the currently selected one
   let regionlist: List<'_> = List::new(av_regions)
-    .bg(stats.apptheme.colors.lblack)
+    .bg(stats.apptheme.colors_app.background_darkest.color)
     .block(
       Block::default()
         .borders(Borders::ALL)
         .border_style(match stats.selection_mode {
-          SelectionMode::Region => stats.apptheme.active_border_style,
-          _ => stats.apptheme.border_style,
+          SelectionMode::Region => stats.apptheme.styles_app.active_border_style,
+          _ => stats.apptheme.styles_app.border_style,
         })
         .title(Title::from("Regions").alignment(Alignment::Left))
         .title(Title::from(sort_indicator).alignment(Alignment::Right)),
     )
     .highlight_style(if sel_item.is_blocked {
-      stats.apptheme.highlight_item_style.bg(stats.apptheme.colors.accent_wred).fg(Color::White)
+      stats.apptheme.styles_app.highlight_item_style.bg(stats.apptheme.colors_app.warn_color.color).fg(stats.apptheme.colors_app.text_color.color)
     } else {
-      stats.apptheme.highlight_item_style
+      stats.apptheme.styles_app.highlight_item_style
     })
     .highlight_symbol(">> ");
 
@@ -109,9 +109,9 @@ pub fn make_city_list<'a>(stats: &Stats) -> List<'a> {
       let is_blocked = i.0.is_blocked;
       let mut line = Line::from(format!("{}", i.0.name.clone()));
       line.patch_style(if is_blocked {
-        stats.apptheme.default_text_style.bg(stats.apptheme.colors.accent_wred)
+        Style::default().fg(stats.apptheme.colors_app.text_color.color).bg(stats.apptheme.colors_app.warn_color.color)
       } else {
-        stats.apptheme.default_text_style
+        Style::default().fg(stats.apptheme.colors_app.text_color.color)
       });
       ListItem::new(line)
     })
@@ -124,21 +124,21 @@ pub fn make_city_list<'a>(stats: &Stats) -> List<'a> {
   let sort_indicator = make_sort_state_indicator(&stats.apptheme, stats.cities_sort);
   // Create a List from all list items and highlight the currently selected one
   let citylist: List<'_> = List::new(av_cities)
-    .bg(stats.apptheme.colors.lblack)
+    .bg(stats.apptheme.colors_app.background_darkest.color)
     .block(
       Block::default()
         .borders(Borders::ALL)
         .border_style(match stats.selection_mode {
-          SelectionMode::City => stats.apptheme.active_border_style,
-          _ => stats.apptheme.border_style,
+          SelectionMode::City => stats.apptheme.styles_app.active_border_style,
+          _ => stats.apptheme.styles_app.border_style,
         })
         .title(Title::from("Cities").alignment(Alignment::Left))
         .title(Title::from(sort_indicator).alignment(Alignment::Right)),
     )
     .highlight_style(if sel_item.is_blocked {
-      stats.apptheme.highlight_item_style.bg(stats.apptheme.colors.accent_wred).fg(Color::White)
+      stats.apptheme.styles_app.highlight_item_style.bg(stats.apptheme.colors_app.warn_color.color).fg(stats.apptheme.colors_app.text_color.color)
     } else {
-      stats.apptheme.highlight_item_style
+      stats.apptheme.styles_app.highlight_item_style
     })
     .highlight_symbol(">> ");
 
@@ -154,9 +154,9 @@ pub fn make_isp_list<'a>(stats: &Stats) -> List<'a> {
       let is_blocked = i.0.is_blocked;
       let mut line = Line::from(format!("{}", i.0.name.clone()));
       line.patch_style(if is_blocked {
-        stats.apptheme.default_text_style.bg(stats.apptheme.colors.accent_wred)
+        Style::default().fg(stats.apptheme.colors_app.text_color.color).bg(stats.apptheme.colors_app.warn_color.color)
       } else {
-        stats.apptheme.default_text_style
+        Style::default().fg(stats.apptheme.colors_app.text_color.color)
       });
       ListItem::new(line)
     })
@@ -169,21 +169,21 @@ pub fn make_isp_list<'a>(stats: &Stats) -> List<'a> {
   let sort_indicator = make_sort_state_indicator(&stats.apptheme, stats.isps_sort);
   // Create a List from all list items and highlight the currently selected one
   let isplist: List<'_> = List::new(av_isps)
-    .bg(stats.apptheme.colors.lblack)
+    .bg(stats.apptheme.colors_app.background_darkest.color)
     .block(
       Block::default()
         .borders(Borders::ALL)
         .border_style(match stats.selection_mode {
-          SelectionMode::ISP => stats.apptheme.active_border_style,
-          _ => stats.apptheme.border_style,
+          SelectionMode::ISP => stats.apptheme.styles_app.active_border_style,
+          _ => stats.apptheme.styles_app.border_style,
         })
         .title(Title::from("ISPs").alignment(Alignment::Left))
         .title(Title::from(sort_indicator).alignment(Alignment::Right)),
     )
     .highlight_style(if sel_item.is_blocked {
-      stats.apptheme.highlight_item_style.bg(stats.apptheme.colors.accent_wred).fg(Color::White)
+      stats.apptheme.styles_app.highlight_item_style.bg(stats.apptheme.colors_app.warn_color.color).fg(stats.apptheme.colors_app.text_color.color)
     } else {
-      stats.apptheme.highlight_item_style
+      stats.apptheme.styles_app.highlight_item_style
     })
     .highlight_symbol(">> ");
 
@@ -197,28 +197,28 @@ pub fn make_ip_list<'a>(stats: &Stats) -> List<'a> {
     .iter()
     .map(|i| {
       let line = Line::from(i.ip.clone());
-      ListItem::new(line).style(stats.apptheme.default_text_style)
+      ListItem::new(line).style(Style::default().fg(stats.apptheme.colors_app.text_color.color))
     })
     .collect();
   let sel_item = stats.selected_ip.clone();
   let sort_indicator = make_sort_state_indicator(&stats.apptheme, stats.ips_sort);
   // Create a List from all list items and highlight the currently selected one
   let iplist: List<'_> = List::new(av_ips)
-    .bg(stats.apptheme.colors.lblack)
+    .bg(stats.apptheme.colors_app.background_darkest.color)
     .block(
       Block::default()
         .borders(Borders::ALL)
         .border_style(match stats.selection_mode {
-          SelectionMode::IP => stats.apptheme.active_border_style,
-          _ => stats.apptheme.border_style,
+          SelectionMode::IP => stats.apptheme.styles_app.active_border_style,
+          _ => stats.apptheme.styles_app.border_style,
         })
         .title(Title::from("IPs").alignment(Alignment::Left))
         .title(Title::from(sort_indicator).alignment(Alignment::Right)),
     )
     .highlight_style(if sel_item.is_banned {
-      stats.apptheme.highlight_item_style.bg(stats.apptheme.colors.accent_wred).fg(Color::White)
+      stats.apptheme.styles_app.highlight_item_style.bg(stats.apptheme.colors_app.warn_color.color).fg(stats.apptheme.colors_app.text_color.color)
     } else {
-      stats.apptheme.highlight_item_style
+      stats.apptheme.styles_app.highlight_item_style
     })
     .highlight_symbol(">> ");
   iplist
@@ -226,33 +226,34 @@ pub fn make_ip_list<'a>(stats: &Stats) -> List<'a> {
 
 pub fn make_sort_state_indicator<'a>(theme: &Theme, sort_state: SortState) -> Line<'a> {
   let sortstate: (u8, &str, Style) = match sort_state {
-    SortState::Alphabetical => (0, "⬆", theme.active_border_style),
-    SortState::AlphabeticalRev => (0, "⬇", theme.active_border_style),
-    SortState::NumWarns => (1, "⬆", theme.active_border_style),
-    SortState::NumWarnsRev => (1, "⬇", theme.active_border_style),
-    SortState::Blocked => (2, "⬆", theme.active_border_style),
-    SortState::BlockedRev => (2, "⬇", theme.active_border_style),
+    SortState::Alphabetical => (0, "⬆", theme.styles_app.active_border_style),
+    SortState::AlphabeticalRev => (0, "⬇", theme.styles_app.active_border_style),
+    SortState::NumWarns => (1, "⬆", theme.styles_app.active_border_style),
+    SortState::NumWarnsRev => (1, "⬇", theme.styles_app.active_border_style),
+    SortState::Blocked => (2, "⬆", theme.styles_app.active_border_style),
+    SortState::BlockedRev => (2, "⬇", theme.styles_app.active_border_style),
   };
+  let default_text_style = Style::default().fg(theme.colors_app.text_color.color);
   let sort_indicator = Line::from(vec![
-    Span::styled("[ ", theme.default_text_style),
+    Span::styled("[ ", Style::default().fg(theme.colors_app.text_color.color)),
     if sortstate.0 == 0 {
       Span::styled(format!("ABC {} ", sortstate.1), sortstate.2)
     } else {
-      Span::styled("ABC   ", theme.default_text_style)
+      Span::styled("ABC   ", default_text_style)
     },
-    Span::styled("|", theme.default_text_style),
+    Span::styled("|", default_text_style),
     if sortstate.0 == 1 {
       Span::styled(format!(" Warn {} ", sortstate.1), sortstate.2)
     } else {
-      Span::styled(" Warn   ", theme.default_text_style)
+      Span::styled(" Warn   ", default_text_style)
     },
-    Span::styled("|", theme.default_text_style),
+    Span::styled("|", default_text_style),
     if sortstate.0 == 2 {
       Span::styled(format!(" Block {} ", sortstate.1), sortstate.2)
     } else {
-      Span::styled(" Block   ", theme.default_text_style)
+      Span::styled(" Block   ", default_text_style)
     },
-    Span::styled(" ]", theme.default_text_style),
+    Span::styled(" ]", default_text_style),
   ]);
   sort_indicator
 }
@@ -283,27 +284,27 @@ pub fn make_overview_paragraph<'a>(
   } else {
     selected_ban_percent_total = 0.;
   }
-
+  let default_text_style = Style::default().fg(theme.colors_app.text_color.color);
   let lines: Vec<Line> = vec![
-    Line::from(vec![Span::styled(format!(" Selected     :"), Style::default().bg(theme.colors.lblack))]),
-    Line::from(vec![Span::styled(format!(" {}", item_name), Style::default().fg(theme.colors.accent_lorange))]),
+    Line::from(vec![Span::styled(format!(" Selected     :"), Style::default().bg(theme.colors_app.background_darkest.color))]),
+    Line::from(vec![Span::styled(format!(" {}", item_name), Style::default().fg(theme.colors_app.accent_color_a_var.color))]),
     Line::from(vec![if is_blocked {
-      Span::styled(format!(" Blocked"), Style::default().fg(theme.colors.accent_orange))
+      Span::styled(format!(" Blocked"), Style::default().fg(theme.colors_app.accent_color_a.color))
     } else {
-      Span::styled(format!(" Open   "), Style::default().fg(theme.colors.accent_lime))
+      Span::styled(format!(" Open   "), Style::default().fg(theme.colors_app.confirm_color.color))
     }]),
-    Line::from(vec![Span::styled(format!(" Warnings     : {}", warnings), theme.default_text_style)]),
+    Line::from(vec![Span::styled(format!(" Warnings     : {}", warnings), default_text_style)]),
     Line::from(vec![Span::styled(
       format!(" % total      : {number:.prec$} %", number = selected_warn_percent_total, prec = 2),
-      theme.default_text_style,
+      default_text_style,
     )]),
-    Line::from(vec![Span::styled(format!(" Total        : {}", total_warn), theme.default_text_style)]),
-    Line::from(vec![Span::styled(format!(" Banned       : {}", banned), theme.default_text_style)]),
+    Line::from(vec![Span::styled(format!(" Total        : {}", total_warn), default_text_style)]),
+    Line::from(vec![Span::styled(format!(" Banned       : {}", banned), default_text_style)]),
     Line::from(vec![Span::styled(
       format!(" % total      : {number:.prec$} %", number = selected_ban_percent_total, prec = 2),
-      theme.default_text_style,
+      default_text_style,
     )]),
-    Line::from(vec![Span::styled(format!(" Total        : {}", total_banned), theme.default_text_style)]),
+    Line::from(vec![Span::styled(format!(" Total        : {}", total_banned), default_text_style)]),
   ];
 
   let paragraph = Paragraph::new(lines);
@@ -489,18 +490,19 @@ pub fn make_ip_overview(theme: &Theme, sel_ip: IP) -> impl Widget + '_ {
   let region = selected_ip.region;
   let isp = selected_ip.isp;
 
+  let default_text_style = Style::default().fg(theme.colors_app.text_color.color);
   let lines: Vec<Line> = vec![
     Line::from(vec![Span::styled(format!(" Selected     :"), Style::default().bg(theme.colors_app.background_darkest.color))]),
-    Line::from(vec![Span::styled(format!(" {}", ip), Style::default().fg(theme.colors.accent_lorange))]),
+    Line::from(vec![Span::styled(format!(" {}", ip), Style::default().fg(theme.colors_app.accent_color_a_var.color))]),
     Line::from(vec![if is_banned {
-      Span::styled(format!(" Banned  "), Style::default().fg(theme.colors.accent_orange))
+      Span::styled(format!(" Banned  "), Style::default().fg(theme.colors_app.accent_color_a.color))
     } else {
-      Span::styled(format!(" Welcomed"), Style::default().fg(theme.colors.accent_lime))
+      Span::styled(format!(" Welcomed"), Style::default().fg(theme.colors_app.confirm_color.color))
     }]),
-    Line::from(vec![Span::styled(format!(" Warnings     : {}", warn), theme.default_text_style)]),
-    Line::from(vec![Span::styled(format!(" Banned times : {}", banned_times), theme.default_text_style)]),
-    Line::from(vec![Span::styled(format!(" {city}, {region}, {country} ",), theme.default_text_style)]),
-    Line::from(vec![Span::styled(format!(" {isp} "), theme.default_text_style)]),
+    Line::from(vec![Span::styled(format!(" Warnings     : {}", warn), default_text_style)]),
+    Line::from(vec![Span::styled(format!(" Banned times : {}", banned_times), default_text_style)]),
+    Line::from(vec![Span::styled(format!(" {city}, {region}, {country} ",), default_text_style)]),
+    Line::from(vec![Span::styled(format!(" {isp} "), default_text_style)]),
   ];
 
   let paragraph = Paragraph::new(lines);
@@ -513,36 +515,42 @@ pub fn make_ip_overview(theme: &Theme, sel_ip: IP) -> impl Widget + '_ {
 
 pub fn popup_help(theme: &Theme) -> impl Widget + '_ {
   // make a layout in center of the screen, outside this function, pass area to this
-
+  let headerstyle = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_text_bright.color);
+  let linestyle = Style::default().fg(theme.colors_app.text_color.color);
+  let linestyle_alt: Style;
+  if theme.is_light {
+    linestyle_alt = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_mid.shade(0.5));
+  } else {
+    linestyle_alt = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_mid.color);
+  }
   // make text
   let mut helptext: Vec<Line> = vec![];
-  let mut hheader = Line::from(format!(
-    "---           HOTKEYS       ---                                                                 -"
+  helptext.push(Line::from(Span::styled(format!("Key:          Name          Info"), linestyle)));
+  let mut hheader = Line::from(format!("---           General       ---                                                                 -"
   ));
-  hheader.patch_style(theme.fail2ban_bg);
+  hheader.patch_style(headerstyle);
   helptext.push(hheader);
-  helptext.push(Line::from(format!("Key:          Name          Info")));
-  let mut hheader = Line::from(format!(
-    "---           General       ---                                                                 -"
-  ));
-  hheader.patch_style(theme.fail2ban_bg);
-  helptext.push(hheader);
-  helptext.push(Line::from(format!("Arrowkeys:    Select        Select item in List")));
-  helptext.push(Line::from(format!("BackTab:      Switch        Switch selected List up")));
-  helptext.push(Line::from(format!("Tab:          Switch        Switch selected List down")));
-  helptext.push(Line::from(format!("W|w:          Help          Toggle help")));
-  helptext.push(Line::from(format!("R|r:          Refresh       Gets up-to-data for List from db")));
-  helptext.push(Line::from(format!("                            (Country auto-fetches all)")));
-  helptext.push(Line::from(format!("E|e:          Back          Return to main screen")));
-  helptext.push(Line::from(format!("B|b:          Block         Blocks all IPs for selected")));
-  helptext.push(Line::from(format!("U|u:          Unblock       Lifts the Block for selected")));
-  helptext.push(Line::from(format!("A|a:          SortABC       Sorts selected List by Alpha-Num")));
-  helptext.push(Line::from(format!("S|s:          SortWarn      Sorts selected List by number of warnings")));
-  helptext.push(Line::from(format!("D|d:          SortBlock     Sorts selected List by blocked / unblocked")));
+  helptext.push(Line::from(Span::styled(format!("Arrowkeys:    Select        Select item in List"), linestyle)));
+  helptext.push(Line::from(Span::styled(format!("BackTab:      Switch        Switch selected List up"), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!("Tab:          Switch        Switch selected List down"), linestyle)));
+  helptext.push(Line::from(Span::styled(format!("W|w:          Help          Toggle help"), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!("R|r:          Refresh       Gets up-to-data for List from db"), linestyle)));
+  helptext.push(Line::from(Span::styled(format!("                            (Country auto-fetches all)"), linestyle)));
+  helptext.push(Line::from(Span::styled(format!("E|e:          Back          Return to main screen"), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!("B|b:          Block         Blocks all IPs for selected"), linestyle)));
+  helptext.push(Line::from(Span::styled(format!("U|u:          Unblock       Lifts the Block for selected"), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!("A|a:          SortABC       Sorts selected List by Alpha-Num"), linestyle)));
+  helptext.push(Line::from(Span::styled(format!("S|s:          SortWarn      Sorts selected List by number of warnings"), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!("D|d:          SortBlock     Sorts selected List by blocked / unblocked"), linestyle)));
 
   let infoblock = Paragraph::new(helptext)
-    .set_style(Style::default())
-    .block(Block::default().bg(theme.colors.lblack).borders(Borders::ALL).title("Help"));
+  .set_style(Style::default())
+  .block(Block::default()
+  .bg(theme.colors_app.background_darkest.color)
+  .fg(theme.colors_app.background_text_bright.color)
+  .borders(Borders::ALL)
+  .border_style(Style::default().fg(theme.colors_app.text_color.color))
+  .title("Help"));
   infoblock
 }
 
@@ -604,32 +612,36 @@ pub fn popup_un_block_selected(stats: &Stats, is_block: bool) -> impl Widget + '
     },
   };
 
+  let default_text_style = Style::default().fg(stats.apptheme.colors_app.text_color.color);
+
   let blockstr = if is_block { "BLOCK" } else { "UNBLOCK" };
 
-  let mut infospan: Span = Span::styled(format!(""), stats.apptheme.default_text_style);
+  let mut infospan: Span = Span::styled(format!(""), default_text_style);
   if !is_block {
     infospan =
-      Span::styled(format!("NOTE: Unblocking does not lead to unbanning any IPs"), stats.apptheme.default_text_style);
+      Span::styled(format!("NOTE: Unblocking does not lead to unbanning any IPs"), default_text_style);
   }
 
   let mut clearlisttext: Vec<Line> = vec![];
   let clearlistline = Line::from(vec![
-    Span::styled(format!("Press "), stats.apptheme.default_text_style),
-    Span::styled(format!("Y | y "), Style::default().fg(stats.apptheme.colors.accent_lime)),
-    Span::styled(format!("to confirm or "), stats.apptheme.default_text_style),
-    Span::styled(format!("N | n "), Style::default().fg(stats.apptheme.colors.accent_orange)),
-    Span::styled(format!("to cancel."), stats.apptheme.default_text_style),
+    Span::styled(format!("Press "), default_text_style),
+    Span::styled(format!("Y | y "), Style::default().fg(stats.apptheme.colors_app.confirm_color.color)),
+    Span::styled(format!("to confirm or "), default_text_style),
+    Span::styled(format!("N | n "), Style::default().fg(stats.apptheme.colors_app.accent_color_a.color)),
+    Span::styled(format!("to cancel."), default_text_style),
   ]);
   //clearlistline.patch_style(stats.apptheme.selected_ip_bg);
   clearlisttext.push(Line::from(vec![infospan]));
   clearlisttext.push(clearlistline);
 
   let clearlistbox =
-    Paragraph::new(clearlisttext).alignment(Alignment::Center).set_style(stats.apptheme.default_background).block(
+    Paragraph::new(clearlisttext).alignment(Alignment::Center)
+    .set_style( Style::default().fg(stats.apptheme.colors_app.background_mid.color))
+    .block(
       Block::default()
         .borders(Borders::ALL)
         .title(format!("[ Confirm to {} all IPs for {} -> {} ]", blockstr, modestr, sel_str))
-        .style(stats.apptheme.default_text_style)
+        .style(default_text_style.bg(stats.apptheme.colors_app.background_darkest.color))
         .title_alignment(Alignment::Center),
     );
   clearlistbox
@@ -654,12 +666,12 @@ pub fn make_bars_for_timestamps<'a>(theme: &Theme, timestamps: Vec<DateTime<Fixe
         .value(num_aday as u64)
         .style(if color_switcher {
           color_switcher = false;
-          theme.username_style
+          Style::default().fg(theme.colors_app.accent_color_a.color)
         } else {
           color_switcher = true;
-          theme.default_text_style.fg(theme.colors.accent_dblue)
+          Style::default().fg(theme.colors_app.accent_color_b_mid.color)
         })
-        .value_style(theme.fail2ban_bg);
+        .value_style(Style::default().bg(theme.colors_app.background_brightest.color));
       babars.push(abar);
       num_aday = 0;
       aday = stamp;
@@ -673,13 +685,14 @@ pub fn make_bars_for_timestamps<'a>(theme: &Theme, timestamps: Vec<DateTime<Fixe
       .label(aday.to_string().into())
       .value(num_aday as u64)
       .style(if color_switcher {
-        color_switcher = false;
-        theme.username_style
+        //color_switcher = false;
+        Style::default().fg(theme.colors_app.accent_color_a.color)
       } else {
-        color_switcher = true;
-        theme.fail2ban_bg
+        //color_switcher = true;
+        Style::default().fg(theme.colors_app.accent_color_b_mid.color)
       })
-      .value_style(if color_switcher { theme.default_text_style } else { theme.highlight_item_style });
+      //.value_style(if color_switcher { theme.default_text_style } else { theme.highlight_item_style });
+      .value_style(Style::default().bg(theme.colors_app.background_brightest.color));
     babars.push(abar);
   }
   babars
@@ -687,12 +700,12 @@ pub fn make_bars_for_timestamps<'a>(theme: &Theme, timestamps: Vec<DateTime<Fixe
 
 pub fn create_barchart<'a>(theme: &Theme, bars: Vec<Bar<'a>>, titlestr: &'a str) -> BarChart<'a> {
   let barchart = BarChart::default()
-  .block(Block::default().title(titlestr).borders(Borders::ALL))
+  .block(Block::default().title(titlestr).borders(Borders::ALL).set_style(theme.styles_app.border_style))
   .bar_width(10)
   .bar_gap(1)
   .group_gap(3)
-  .bar_style(Style::new().yellow().bg(theme.colors.ddblue))
-  .value_style(Style::new().white().bold())
+  .bar_style(Style::new().bg(theme.colors_app.background_brightest.color))
+  .value_style(Style::new().fg(theme.colors_app.text_color.color).bold())
   .label_style(Style::new().white())
   //.data(&bars)
   .data(BarGroup::default().bars(&bars))

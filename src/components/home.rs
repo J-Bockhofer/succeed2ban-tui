@@ -143,7 +143,7 @@ impl<'a> Home<'a> {
     self.make_charsoup();
     self.bg_text = vec![];
     self.bg_text_2 = vec![];
-
+    self.selected_ip = "".to_string();
 
     self.internal_logs = StatefulList::with_items(vec![]);
     self.iplist_capacity = 10;
@@ -170,7 +170,7 @@ impl<'a> Home<'a> {
     self.drawmode = DrawMode::Decaying;
     self.displaymode = DisplayMode::Normal;
     self.iomode = IOMode::Follow;
-
+    
     self.anim_querycursor = Animation::with_items(vec![""," "]);
     self.queryerror = String::from("Enter IP");
 
@@ -184,7 +184,13 @@ impl<'a> Home<'a> {
   pub fn make_charsoup(&mut self) {
     let mut rng = rand::thread_rng();
     let frame_df = rand::distributions::Uniform::new(0, self.anim_charsoup.keyframes.len() - 1);
-    let step = rand::distributions::Uniform::new(-1., -0.1);
+    let step: rand::distributions::Uniform<f64>;
+    if self.apptheme.is_light {
+      step = rand::distributions::Uniform::new(0.1, 1.);
+    } else {
+      step = rand::distributions::Uniform::new(-1., -0.1);
+    }
+
     let mut bg_text: Vec<Line> = vec![];
     for h in 0..40 {   
       let frame = frame_df.sample(&mut rng);
@@ -195,7 +201,7 @@ impl<'a> Home<'a> {
         let choice = step.sample(&mut rng) as f32;
         let color = self.apptheme.colors_app.accent_color_b_mid.shade(choice);
         let char = format!("{}",char);
-        Span::styled(char, self.apptheme.default_text_style.fg(color))
+        Span::styled(char, Style::default().fg(color))
       }).collect();
       bg_text.push(Line::from(vecspan));
     }  
@@ -251,7 +257,7 @@ impl<'a> Home<'a> {
 
     canvas::Canvas::default()
         .background_color(self.apptheme.colors_app.background_mid.color)
-        .block(Block::default().borders(Borders::ALL).title("").bg(self.apptheme.colors.default_background))
+        .block(Block::default().borders(Borders::ALL).title("").bg(self.apptheme.colors_app.background_mid.color))
         .marker(Marker::Braille)
         .paint(move |ctx| {
             // draw map
@@ -331,10 +337,9 @@ impl<'a> Home<'a> {
 
     let querycursor = self.anim_querycursor.state.selected().unwrap();
     let querycursor = self.anim_querycursor.keyframes[querycursor];
-    self.ipstring = String::from("");
     let selected_ip: String;
     let sel_idx = self.iplist.state.selected();
-    if !self.iplist.items.is_empty() {
+    if !self.iplist.items.is_empty() && self.ipstring.is_empty() {
       let sel_idx = sel_idx.unwrap();
       selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
       self.ipstring = selected_ip;
@@ -365,10 +370,9 @@ impl<'a> Home<'a> {
 
     let querycursor = self.anim_querycursor.state.selected().unwrap();
     let querycursor = self.anim_querycursor.keyframes[querycursor];
-    self.ipstring = String::from("");
     let selected_ip: String;
     let sel_idx = self.iplist.state.selected();
-    if !self.iplist.items.is_empty() {
+    if !self.iplist.items.is_empty() && self.ipstring.is_empty() {
       let sel_idx = sel_idx.unwrap();
       selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
       self.ipstring = selected_ip;
@@ -407,6 +411,7 @@ impl<'a> Home<'a> {
 
   fn submit_ip(&mut self, is_ban:bool) -> bool {
     // check if valid IP else return false
+    
     if self.apptheme.ipregex.is_match(&self.ipstring) {
       if is_ban {
         self.command_tx.clone().unwrap().send(Action::RequestBan).unwrap_or_else(|err|{
@@ -417,7 +422,7 @@ impl<'a> Home<'a> {
           println!("Error submitting query from Home {}", err);
         });
       }
-
+      self.ipstring = String::from("");
       return true;
     }
     false
@@ -517,8 +522,8 @@ impl Component for Home<'_> {
             'Q'|'q' => {if self.displaymode == DisplayMode::Query {return Ok(Some(Action::ExitQuery))} else {return Ok(Some(Action::EnterQuery))} },
             'E'|'e' => {return Ok(Some(Action::StatsShow))},
             'C'|'c' => {return Ok(Some(Action::ConfirmClearLists)) },
-            'B'|'b' => {if self.displaymode == DisplayMode::Ban {return Ok(Some(Action::ExitBan))} else {return Ok(Some(Action::EnterBan))}},
-            'U'|'u' => {if self.displaymode == DisplayMode::Unban {return Ok(Some(Action::ExitUnban))} else {return Ok(Some(Action::EnterUnban))}},
+            'B'|'b' => {if self.displaymode == DisplayMode::Ban {self.ipstring = String::from(""); return Ok(Some(Action::ExitBan))} else {self.ipstring = self.selected_ip.clone(); return Ok(Some(Action::EnterBan))}},
+            'U'|'u' => {if self.displaymode == DisplayMode::Unban {self.ipstring = String::from(""); return Ok(Some(Action::ExitUnban))} else {self.ipstring = self.selected_ip.clone(); return Ok(Some(Action::EnterUnban))}},
             'M'|'m' => {if self.displaymode == DisplayMode::Map {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Map;} return Ok(Some(Action::Blank))},
             'T'|'t' => {if self.displaymode == DisplayMode::Logs {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Logs;} return Ok(Some(Action::Blank))},
             // DrawMode switching
@@ -530,7 +535,7 @@ impl Component for Home<'_> {
             'H'|'h' => {self.last_mode = self.mode; return Ok(Some(Action::LogsFirst))}, // top
             'K'|'k' => {self.last_mode = self.mode; return Ok(Some(Action::LogsNext))},  // down
             'L'|'l' => {self.last_mode = self.mode; return Ok(Some(Action::LogsLast))}, // bottom
-            'N'|'n' => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))}, // unselect
+            'P'|'p' => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))}, // unselect
             '+'|'-' => { return Ok(Some(Action::SetCapacity))}, // unselect
             // IP & Action Navigation
             // -- ArrowKeys
@@ -554,7 +559,7 @@ impl Component for Home<'_> {
               //Action::Render
               Action::Blank
             },
-            KeyCode::Right | KeyCode::Tab | KeyCode::Enter => {Action::EnterTakeAction},
+            KeyCode::Right | KeyCode::Tab | KeyCode::BackTab | KeyCode::Enter => {Action::EnterTakeAction},
             _ => {
               self.input.handle_event(&crossterm::event::Event::Key(key));
               //Action::Render
@@ -564,7 +569,7 @@ impl Component for Home<'_> {
           //////////////
         Mode::TakeAction => {
           match key.code {
-            KeyCode::Tab => {
+            KeyCode::Tab | KeyCode::BackTab  => {
               Action::EnterNormal
             },
             KeyCode::Left => {
@@ -778,7 +783,7 @@ impl Component for Home<'_> {
 
         let tx = self.command_tx.clone().unwrap();
         tx.send(Action::InternalLog(format!(" ✓ Got home: {}, {}", x.city, x.country)))?;
-
+        
       }
 
       //General
@@ -787,17 +792,17 @@ impl Component for Home<'_> {
       Action::ConfirmedClearLists => { self.clear_lists(); self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
       Action::SetCapacity => {self.last_mode = self.mode; self.mode = Mode::SetIOCapacity; self.displaymode = DisplayMode::SetIOCapacity;},
       Action::SubmittedCapacity => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
-      Action::SelectTheme(x) => {self.select_new_theme(x)},
+      Action::SelectTheme(x) => {self.select_new_theme(x); self.make_charsoup();},
 
       // List Actions
       // -- LOG LIST -- iostreamed
-      Action::LogsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsNext);}, // deprec
+      //Action::LogsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsNext);}, // deprec
       Action::LogsNext => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.next();}},
-      Action::LogsSchedulePrevious => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsPrevious);}, // {list_actions::schedule_previous_loglist(self.command_tx.clone().unwrap());},
+      //Action::LogsSchedulePrevious => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsPrevious);}, // {list_actions::schedule_previous_loglist(self.command_tx.clone().unwrap());},
       Action::LogsPrevious => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.previous();}},
-      Action::LogsScheduleFirst => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsFirst);}, // deprec
+      //Action::LogsScheduleFirst => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsFirst);}, // deprec
       Action::LogsFirst => {  self.stored_styled_iostreamed.state.select(Some(0)) },
-      Action::LogsScheduleLast => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsLast);}, // deprec
+      //Action::LogsScheduleLast => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsLast);}, // deprec
       Action::LogsLast => {  
         if self.stored_styled_iostreamed.items.len() > 0 {
           let idx = Some(self.stored_styled_iostreamed.items.len() - 1);
@@ -965,7 +970,7 @@ impl Component for Home<'_> {
       // display popups/overlays
       match self.displaymode {
         DisplayMode::Help => {
-          let p_area = centered_rect(f.size(), 35, 45);
+          let p_area = centered_rect(f.size(), 35, 50);
           f.render_widget(Clear, p_area);
           f.render_widget(ui::create_help_popup(self),p_area);
           },
@@ -1021,6 +1026,7 @@ impl Component for Home<'_> {
     } else {
       if self.startup_complete && !self.showing_stats && self.displaymode == DisplayMode::Map {
         // Draw only Map
+        self.mode = Mode::Normal; // Prevents executing actions silently on map screen
         // Make new layout
         for item in &mut self.iplist.items  {
           item.pointdata.decay_point(self.apptheme.decay_time);

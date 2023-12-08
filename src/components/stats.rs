@@ -131,14 +131,14 @@ impl <'a> Stats  {
         selected_warn = tuple.warnings.try_into().unwrap_or(0);
                      
         let lines: Vec<Line> = vec![
-            Line::from(vec![Span::styled(format!(" Selected     :"), Style::default().bg(self.apptheme.colors.lblack)), ]),
-            Line::from(vec![Span::styled(format!(" {}", tuple.ip), Style::default().fg(self.apptheme.colors.accent_lorange))]),
-            Line::from(vec![Span::styled(format!(" Warnings     : {}", selected_warn), self.apptheme.default_text_style)]),
+            Line::from(vec![Span::styled(format!(" Selected     :"), Style::default().bg(self.apptheme.colors_app.background_darkest.color)), ]),
+            Line::from(vec![Span::styled(format!(" {}", tuple.ip), Style::default().fg(self.apptheme.colors_app.accent_color_a_var.color))]),
+            Line::from(vec![Span::styled(format!(" Warnings     : {}", selected_warn), Style::default().fg(self.apptheme.colors_app.text_color.color))]),
         ];
 
         paragraph = Paragraph::new(lines);
     }
-    paragraph.block(Block::default().borders(Borders::ALL).title("IP Stats").bg(self.apptheme.colors.lblack))
+    paragraph.block(Block::default().borders(Borders::ALL).title("IP Stats").bg(self.apptheme.colors_app.background_darkest.color))
   }
 
   pub fn selected_country(&mut self) {
@@ -468,7 +468,7 @@ impl Component for Stats {
     if self.showing_stats {
 
         // paint the background
-        let bg = Paragraph::default().style(self.apptheme.default_background);
+        let bg = Paragraph::default().style(Style::default().bg(self.apptheme.colors_app.background_mid.color));
         f.render_widget(bg, rect);
 
         let layout_a = Layout::default().constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref()).direction(Direction::Horizontal).split(rect);

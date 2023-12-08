@@ -25,7 +25,7 @@ use crate::themes::ThemeContainer;
 use crate::{action::Action, config::key_event_to_string, themes, animations::Animation, migrations::schema, geofetcher};
 use crate::migrations::schema::{message, isp, city, region, country, ip};
 
-use local_ip_address::local_ip;
+use local_ip_address::local_ip; // maybe use this https://crates.io/crates/get_if_addrs, no curl https://ident.me/
 
 use rand::prelude::*;
 
@@ -38,7 +38,7 @@ use chrono;
 
 use regex::Regex;
 
-fn map_range(from_range: (f64, f64), to_range: (f64, f64), s: f64) -> f64 {
+pub fn map_range(from_range: (f64, f64), to_range: (f64, f64), s: f64) -> f64 {
     to_range.0 + (s - from_range.0) * (to_range.1 - to_range.0) / (from_range.1 - from_range.0)
   }
 
@@ -94,7 +94,6 @@ pub struct Startup <'a>{
 
   available_themes: StatefulList<ThemeContainer>,
 
-  
 
 }
 
@@ -244,6 +243,7 @@ impl <'a> Startup <'a> {
     }
     if self.mode == Mode::Done && self.countdown_to_start == 0 {
       if self.elapsed_frames > 12.  { // sync load with anim
+        //self.set_theme();
         let _ = self.action_tx.clone().unwrap().send(Action::StartupDone);
       }      
     }
@@ -279,7 +279,7 @@ impl Component for Startup <'_> {
                 "Dec"];
       
       self.action_tx.clone().unwrap().send(Action::StartupConnect).expect("Action::StartupConnect failed to send!");
-
+      
       Ok(())
   }
 
@@ -297,6 +297,9 @@ impl Component for Startup <'_> {
           KeyCode::Up => {self.available_themes.previous(); self.add_thyme();},
           KeyCode::Down => {self.available_themes.next(); self.add_thyme();},
           KeyCode::Enter => {self.set_theme(); self.add_thyme();},
+          KeyCode::Esc => {return Ok(Some(Action::Quit))},
+          KeyCode::BackTab => {self.countdown_to_start = 1;},
+          KeyCode::Tab => {self.countdown_to_start = 1;}
           _ => {},
         }
         
@@ -320,15 +323,17 @@ impl Component for Startup <'_> {
       Action::StartupConnect => {
         let dt = Utc::now();
 
-        let my_local_ip = local_ip();
+        //let my_local_ip = local_ip();
         let tx = self.action_tx.clone().unwrap();
         tokio::spawn(async move {
-          if let Ok(my_local_ip) = my_local_ip {
-            // perform some work here...
+          // get my local ip from somewhere
+          let my_local_ip = geofetcher::fetch_home().await.unwrap_or_default();
+
+          //if let Ok(my_local_ip) = my_local_ip {
             let geodat = geofetcher::fetch_geolocation(my_local_ip.to_string().as_str()).await.unwrap_or(serde_json::Value::default());
 
             let geoip = String::from(geodat.get("query").unwrap().as_str().unwrap());
-            let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string();
+            let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string(); // ACTUALLY CRASHED HERE ON PI, CANT GET IP BEHIND ROUTER/ NAT
             let geolon = geodat.get("lon").unwrap().as_number().unwrap().to_string();
             let geoisp = String::from(geodat.get("isp").unwrap().as_str().unwrap());
 
@@ -354,10 +359,11 @@ impl Component for Startup <'_> {
 
             tx.send(Action::StartupGotHome(geodata)).unwrap_or_default(); // false, GeoData was acquired freshly            
             
-          } else {
-            todo!("Error getting local IP: {:?}", my_local_ip);
-          }
-        });
+          //} else {
+          //  todo!("Error getting local IP: {:?}", my_local_ip);
+          //}
+        }
+        );
 
 
         self.log_messages.push(format!("{}            Connecting to db", dt.to_string()));
@@ -431,14 +437,14 @@ impl Component for Startup <'_> {
             let req_ip = cip.to_string();
             let sender = self.action_tx.clone().unwrap();
             self.fetching_ips.push(req_ip.clone());
-            
+
             let handle = tokio::task::spawn(async move {
               // perform some work here...
               
               let geodat = geofetcher::fetch_geolocation(req_ip.as_str()).await.unwrap_or(serde_json::Value::default());
 
               let geoip = String::from(geodat.get("query").unwrap().as_str().unwrap());
-              let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string();
+              let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string(); // CRASH ON PI
               let geolon = geodat.get("lon").unwrap().as_number().unwrap().to_string();
               let geoisp = String::from(geodat.get("isp").unwrap().as_str().unwrap());
   
@@ -843,8 +849,8 @@ impl Component for Startup <'_> {
             let sublayout = Layout::default().constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref()).direction(Direction::Horizontal).split(layout[1]);
 
             let canvas = canvas::Canvas::default()
-            .background_color(self.apptheme.colors.default_background)
-            .block(Block::default().borders(Borders::ALL).title("World").bg(self.apptheme.colors.default_background))
+            .background_color(self.apptheme.colors_app.background_mid.color)
+            .block(Block::default().borders(Borders::ALL).title("World").bg(self.apptheme.colors_app.background_mid.color))
             .marker(Marker::Braille)
             .paint( |ctx| {
    
@@ -893,14 +899,20 @@ impl Component for Startup <'_> {
 
             let mut rng = rand::thread_rng();
             //let num_lines: f32 = rng.gen_range(-1..1.);
-            let step = rand::distributions::Uniform::new(-1., 0.);
+            let step: rand::distributions::Uniform<f64>;
+            if self.apptheme.is_light {
+              step = rand::distributions::Uniform::new(0., 1.);
+            } else {
+              step = rand::distributions::Uniform::new(-1., 0.);
+            }
+            
             
 
             let vecspan: Vec<Span> = chars.into_iter().map(|char|{
               let choice = step.sample(&mut rng) as f32;
               let color = self.apptheme.colors_app.text_color.shade(choice);
               let char = format!("{}",char);
-              Span::styled(char, self.apptheme.default_text_style.fg(color))
+              Span::styled(char, Style::default().fg(color))
             }).collect();
 
             //let soupline = Line::from(vecspan);
