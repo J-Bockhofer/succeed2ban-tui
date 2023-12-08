@@ -113,6 +113,9 @@ pub struct Home<'a> {
 
   anim_charsoup: Animation<&'a str>,
   anim_charsoup_precalc: Vec<Line<'a>>,
+
+  bg_text: Vec<Line<'a>>,
+  bg_text_2: Vec<Line<'a>>,
 }
 
 impl<'a> Home<'a> {
@@ -124,45 +127,22 @@ impl<'a> Home<'a> {
     self.iplist = StatefulList::with_items(vec![
     ]);
     self.anim_charsoup = Animation::with_items(vec![
-      "dcc&ßm-)44sas/a.sc&%cßd%acb8ß0bj",
-  ")1d.yß.1ybd4e.)-j6155dßße0#4(-6&",
-  "m/.,5ess#05%-ssâ3/jej-cs6s.e.s-s",
-  "d-s)38&m-a/s-0s/bjbd6%ssmb0-b(&(",
-  "b%3(bcjc4(a0/3c0c1(4-,3//eß,8ß/y", 
+      "dcc&ßm-)44sas/a.sc&%cßd%acb8ß0bj)1d.yß.1ybd4e.)-j6155dßße0#4(-6&m/.,5ess#05%-ssâ3/jej-cs6s.e.s-sd-s)38&m-a/s-0s/bjbd6%ssmb0-b(&(b%3(bcjc4(a0/3c0c1(4-,3//eß,8ß/yfms834zgb24)(=(/767TP+ß§p§O88uhDbiUz7BhOohelpbfsdhfj735r3478t6tg(§fdsf$TV$R5I235g(&§FFVsfd3s24U§QR", 
 
-  "%d.%%%d#(,bâ-s&)3y3ac5y#64-&-/s,",
-    "dßsyßâ#c&#6mdßbj6m6&65(cs/sy1yß%",
-   "41,..,j08&#6,68&yß-s1d4âs6b#e,a&",
-    "8.yy36s,y56c(5d-c8.&/%&58s35s,s6",
-    "/)-.5#&,ß01my&&sce033ß8-)ma/cc6s", 
+    "%d.%%%d#(,bâ-s&)3y3ac5y#64-&-/s,dßsyßâ#c&#6mdßbj6m6&65(cs/sy1yß%41,..,j08&#6,68&yß-s1d4âs6b#e,a&8.yy36s,y56c(5d-c8.&/%&58s35s,s6/)-.5#&,ß01my&&sce033ß8-)ma/cc6s)%&§Bkfdjjk954ßi#+4345sfd5.4,52kfs35$%hd87/§%gfvB/§TGBGF(z47t5gbgf74§%6bvcxbv($njs78345%t/x,6er", 
 
-    "sßâßyc&-/â,65.ma/#5eâ/ya4/&dc&m",
-    ".10ems.css4(m33mßay84yj.cße4yd&",
-    "&e-8#36#y,yse,a0syy(/ßm-563ßc5y1",
-    "5#ccs&-e(â-1ß113ßsjd-j-.,a#j3(c",
-    "s351-ac3b)c#b.0(b,)a5085d4,s0c&d",
+    "sßâßyc&-/â,65.ma/#5eâ/ya4/&dc&m.fdsgkerhallo65m5658z&§$%-46,a#45.10ems.css4(m33mßay84yj.cße4yd&&e-8#36#y,yse,a0syy(/ßm-563ßc5y15#ccs&-e(â-1ß113ßsjd-j-.,a#j3(cs357645b&%wbff<vzs56431-ac3b)c#b.0(b,)a5085d4,s0c&d6mdßbj6m6&65(cs/b.b%5c.#)344aese#s&d/%â2gsg#46c(g",
 
-    "â6c#.8(ms/)&381câd6â%1b,sâßcde1s",
-    "eß13âsß3s#8j.ca&5ß%s/#âj&a.md%ß-",
-    "ßeys)sß4â5s63ßsd%31,88c4ß-b.b%5c",
-    ".#)344aese#s&d/%â5sa,c)./bs4cs-j",
-    ",dsme(jâ5(6%s5.bc,eb-36ycce5e,5d",
+    "â6c#.8(ms/)&381câd6â%1b,sâßcde1seß13âsß3s#8j.ca&5ß%s/#âj&a.md%ß-ßeys)sß4â5s63ßsd%31,88c4ß-b.b%5c.#)344aese#s&d/%â5sa,c)./bs4cs-j,dsme(jâ5(6%s5.bc,eb-36ycce5e,5d0#-sh9k/6kl/l,%5c.#)344aese#s&d/%â5sa,c).78t6tg(§f",
 
-    "/)c%#mgfc.-m,-mykm-hcshyy##&4y))",
-    "(1c/ß/k4,./6%ch.ßmg7-429hdfk%c)/",
-    "dyksh-%,ym.âc1g)dh-âs/yd%l%.4c,7",
-    ".l0#-sh9k/6kl/l,a.,cyâ00m2.%hl-,",
-    "sâs-ß1-%h(.yyßhaamyc2ßk7l)c.gcßf",
+    "/)c%#mgfc.-m,-mykm-hcsh5sfd5.4,52kfs35$%hd87/§%gfvB/§Tyy##&4y))(1c/ß/k4,./6%ch.ßmg7-429hdfk%c)/dyksh-24)(=(/767TP+ß§p§O%,ym.âc1g)dh-âs/yd%l%.4c,7.l0#-sh9k/6kl/l,a.,cyâ00m2.%hl-,sâs-ß1-%h(.yyßhaamyc2ßk7l)c.gcßf843(/)bfsbz9q4h546?)=§$dsd0#-sh9k/6kl/l,%5c.#)344aes",
 
-    "gd0)â6%9c.d7170âhdk-4/6a0-#kdylh",
-    "c7k7ß#s1)2(ß(.h92â2g2gsg#46c(gh#,",
-    "aß6,algâds&/)0,y(-mâk&d2lhcß(-(m",
-    "-#4.f,f&))â07c-9,l)c&#4g,/c%)â%h",
-    "lf0ß4dl09f7/mms#.d2hmf44gf-c-10m"
+    "gd0)â6%9c.d7170âhdk-4/6a0/yfms834zgb24)(=(/767TP+ß§p§O88-#kdylhc7k7ß#s1)2(ß(.h92â2g2gsg#46c(gh#,aß6,algâds&/)0,y(-mâk&d2lhcß(-(m-#4.f,f&))â07c-9,l)c&#4g,/c%)â%hlf0ß4dl09f7/mms#.d2hmf44gf-c-10mcjc4(a0/3c0c1(4-ghfdh974/%&GV8vb89Hbvyj7T)§$h8-)ma/cc6s"
     ]);
     self.anim_charsoup_precalc = vec![];
     self.make_charsoup();
-
+    self.bg_text = vec![];
+    self.bg_text_2 = vec![];
 
 
     self.internal_logs = StatefulList::with_items(vec![]);
@@ -204,16 +184,16 @@ impl<'a> Home<'a> {
   pub fn make_charsoup(&mut self) {
     let mut rng = rand::thread_rng();
     let frame_df = rand::distributions::Uniform::new(0, self.anim_charsoup.keyframes.len() - 1);
-    let step = rand::distributions::Uniform::new(-1., 0.);
+    let step = rand::distributions::Uniform::new(-1., -0.1);
     let mut bg_text: Vec<Line> = vec![];
-    for h in 0..60 {   
+    for h in 0..40 {   
       let frame = frame_df.sample(&mut rng);
       let selected_soup = self.anim_charsoup.keyframes[frame];
       let chars: Vec<char> = selected_soup.chars().collect();
 
       let vecspan: Vec<Span> = chars.into_iter().map(|char|{
         let choice = step.sample(&mut rng) as f32;
-        let color = self.apptheme.colors_app.text_color.shade(choice);
+        let color = self.apptheme.colors_app.accent_color_b_mid.shade(choice);
         let char = format!("{}",char);
         Span::styled(char, self.apptheme.default_text_style.fg(color))
       }).collect();
@@ -271,7 +251,7 @@ impl<'a> Home<'a> {
 
     canvas::Canvas::default()
         .background_color(self.apptheme.colors_app.background_mid.color)
-        .block(Block::default().borders(Borders::ALL).title("World").bg(self.apptheme.colors.default_background))
+        .block(Block::default().borders(Borders::ALL).title("").bg(self.apptheme.colors.default_background))
         .marker(Marker::Braille)
         .paint(move |ctx| {
             // draw map
@@ -1061,27 +1041,75 @@ impl Component for Home<'_> {
         }
 
 
-        let term_h = area.height;
-        let mut rng = rand::thread_rng();
-        let frame_df = rand::distributions::Uniform::new(0, self.anim_charsoup_precalc.len() - 1);
-        let step = rand::distributions::Uniform::new(-1., 0.);
-        let mut bg_text: Vec<Line> = vec![];
-        for h in 0..term_h {   
-          let frame = frame_df.sample(&mut rng);
-          let selected_soup = self.anim_charsoup_precalc[frame].clone();
-          bg_text.push(selected_soup);
-        }
+
 
 
         let map_layout = Layout::default()
-        .direction(Direction::Horizontal)
+        .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(5),Constraint::Percentage(90),Constraint::Percentage(5)])
         .split(f.size());
 
+
+
+
+
+        if self.elapsed_rticks == 0 {
+          self.bg_text = vec![];
+          self.bg_text_2 = vec![];
+
+          let term_h = map_layout[0].height;
+          let mut rng = rand::thread_rng();
+          let frame_df = rand::distributions::Uniform::new(0, self.anim_charsoup_precalc.len() - 1);
+          //let step = rand::distributions::Uniform::new(-1., 0.);
+          let step_bool = rand::distributions::Uniform::new(0., 1.);
+          for h in 0..term_h {   
+            let take = step_bool.sample(&mut rng);
+            if take > 0.6 {
+              let frame = frame_df.sample(&mut rng);
+              let selected_soup = self.anim_charsoup_precalc[frame].clone();
+              self.bg_text.push(selected_soup);
+  
+              self.bg_text_2.push(Line::from(""));
+              
+            } else {
+              self.bg_text.push(Line::from(""));
+              let frame = frame_df.sample(&mut rng);
+              let selected_soup = self.anim_charsoup_precalc[frame].clone();            
+              self.bg_text_2.push(selected_soup);
+            }
+          } 
+        } else {
+          let term_h = map_layout[0].height;
+          let mut rng = rand::thread_rng();
+          let frame_df = rand::distributions::Uniform::new(0, self.anim_charsoup_precalc.len() - 1);
+
+          let frame_df_1 = rand::distributions::Uniform::new(0, if self.bg_text.len() < 2 {1} else {self.bg_text.len() - 1} );
+          let frame_df_2 = rand::distributions::Uniform::new(0, if self.bg_text_2.len() < 2 {1} else {self.bg_text_2.len() - 1});
+          //let step = rand::distributions::Uniform::new(-1., 0.);
+          let step_bool = rand::distributions::Uniform::new(0., 1.);
+          for h in 0..term_h {   
+            let take = step_bool.sample(&mut rng);
+            if take > 0.6 {
+              if self.bg_text.is_empty() {continue}
+              let frame = frame_df.sample(&mut rng);
+              let idx = frame_df_1.sample(&mut rng);
+              let selected_soup = self.anim_charsoup_precalc[frame].clone();
+              self.bg_text[idx] = selected_soup;              
+            } else {
+              if self.bg_text_2.is_empty() {continue}
+              let frame = frame_df.sample(&mut rng);
+              let idx = frame_df_2.sample(&mut rng);
+              let selected_soup = self.anim_charsoup_precalc[frame].clone();
+              self.bg_text_2[idx] = selected_soup;  
+            }
+          }           
+        }
+
+        f.render_widget(Clear, area);
         //let num_lines: f32 = rng.gen_range(-1..1.);
         f.render_widget(self.map_canvas(&map_layout[1]), map_layout[1]);
-        f.render_widget(Paragraph::new(bg_text.clone()).block(Block::default().border_style(self.apptheme.styles_app.border_style)).bg(self.apptheme.colors_app.background_darkest.color), map_layout[0]);
-        f.render_widget(Paragraph::new(bg_text).block(Block::default().border_style(self.apptheme.styles_app.border_style)).bg(self.apptheme.colors_app.background_darkest.color), map_layout[2]);
+        f.render_widget(Paragraph::new(self.bg_text.clone()).block(Block::default().border_style(self.apptheme.styles_app.border_style)).bg(self.apptheme.colors_app.background_darkest.color), map_layout[0]);
+        f.render_widget(Paragraph::new(self.bg_text_2.clone()).block(Block::default().border_style(self.apptheme.styles_app.border_style)).bg(self.apptheme.colors_app.background_darkest.color), map_layout[2]);
 
 
 
