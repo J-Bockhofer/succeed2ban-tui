@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
 
+use rand::distributions::Distribution;
 
 use super::{Component, Frame};
 use crate::{
@@ -108,16 +109,62 @@ pub struct Home<'a> {
 
   available_themes: themes::Themes,
 
+  anim_frames: f64,
+
+  anim_charsoup: Animation<&'a str>,
+  anim_charsoup_precalc: Vec<Line<'a>>,
 }
 
 impl<'a> Home<'a> {
   pub fn new() -> Self {
     Self::default().set_items()
   }
-
+  
   pub fn set_items(mut self) -> Self {
     self.iplist = StatefulList::with_items(vec![
     ]);
+    self.anim_charsoup = Animation::with_items(vec![
+      "dcc&ßm-)44sas/a.sc&%cßd%acb8ß0bj",
+  ")1d.yß.1ybd4e.)-j6155dßße0#4(-6&",
+  "m/.,5ess#05%-ssâ3/jej-cs6s.e.s-s",
+  "d-s)38&m-a/s-0s/bjbd6%ssmb0-b(&(",
+  "b%3(bcjc4(a0/3c0c1(4-,3//eß,8ß/y", 
+
+  "%d.%%%d#(,bâ-s&)3y3ac5y#64-&-/s,",
+    "dßsyßâ#c&#6mdßbj6m6&65(cs/sy1yß%",
+   "41,..,j08&#6,68&yß-s1d4âs6b#e,a&",
+    "8.yy36s,y56c(5d-c8.&/%&58s35s,s6",
+    "/)-.5#&,ß01my&&sce033ß8-)ma/cc6s", 
+
+    "sßâßyc&-/â,65.ma/#5eâ/ya4/&dc&m",
+    ".10ems.css4(m33mßay84yj.cße4yd&",
+    "&e-8#36#y,yse,a0syy(/ßm-563ßc5y1",
+    "5#ccs&-e(â-1ß113ßsjd-j-.,a#j3(c",
+    "s351-ac3b)c#b.0(b,)a5085d4,s0c&d",
+
+    "â6c#.8(ms/)&381câd6â%1b,sâßcde1s",
+    "eß13âsß3s#8j.ca&5ß%s/#âj&a.md%ß-",
+    "ßeys)sß4â5s63ßsd%31,88c4ß-b.b%5c",
+    ".#)344aese#s&d/%â5sa,c)./bs4cs-j",
+    ",dsme(jâ5(6%s5.bc,eb-36ycce5e,5d",
+
+    "/)c%#mgfc.-m,-mykm-hcshyy##&4y))",
+    "(1c/ß/k4,./6%ch.ßmg7-429hdfk%c)/",
+    "dyksh-%,ym.âc1g)dh-âs/yd%l%.4c,7",
+    ".l0#-sh9k/6kl/l,a.,cyâ00m2.%hl-,",
+    "sâs-ß1-%h(.yyßhaamyc2ßk7l)c.gcßf",
+
+    "gd0)â6%9c.d7170âhdk-4/6a0-#kdylh",
+    "c7k7ß#s1)2(ß(.h92â2g2gsg#46c(gh#,",
+    "aß6,algâds&/)0,y(-mâk&d2lhcß(-(m",
+    "-#4.f,f&))â07c-9,l)c&#4g,/c%)â%h",
+    "lf0ß4dl09f7/mms#.d2hmf44gf-c-10m"
+    ]);
+    self.anim_charsoup_precalc = vec![];
+    self.make_charsoup();
+
+
+
     self.internal_logs = StatefulList::with_items(vec![]);
     self.iplist_capacity = 10;
     self.available_actions = StatefulList::with_items(vec![
@@ -149,8 +196,30 @@ impl<'a> Home<'a> {
 
     self.iostreamed_capacity = 100;
     self.available_themes = themes::Themes::default();
+    self.anim_frames = 8.;
 
     self
+  }
+
+  pub fn make_charsoup(&mut self) {
+    let mut rng = rand::thread_rng();
+    let frame_df = rand::distributions::Uniform::new(0, self.anim_charsoup.keyframes.len() - 1);
+    let step = rand::distributions::Uniform::new(-1., 0.);
+    let mut bg_text: Vec<Line> = vec![];
+    for h in 0..60 {   
+      let frame = frame_df.sample(&mut rng);
+      let selected_soup = self.anim_charsoup.keyframes[frame];
+      let chars: Vec<char> = selected_soup.chars().collect();
+
+      let vecspan: Vec<Span> = chars.into_iter().map(|char|{
+        let choice = step.sample(&mut rng) as f32;
+        let color = self.apptheme.colors_app.text_color.shade(choice);
+        let char = format!("{}",char);
+        Span::styled(char, self.apptheme.default_text_style.fg(color))
+      }).collect();
+      bg_text.push(Line::from(vecspan));
+    }  
+    self.anim_charsoup_precalc = bg_text;
   }
 
   pub fn keymap(mut self, keymap: HashMap<KeyEvent, Action>) -> Self {
@@ -163,6 +232,20 @@ impl<'a> Home<'a> {
     let w = f64::from(area.width.clone());
     let h = f64::from(area.height.clone());
 
+    let circle_color = self.apptheme.colors_app.accent_color_a.color;
+    //let frames = self.anim_frames as f32;
+    //let elapsed = self.elapsed_frames as f32;
+    //let mut frac = elapsed / (frames*6.);
+
+    //if elapsed % 2. <= 0.1 {
+      //frac = -frac;
+      //circle_color = self.apptheme.colors_app.accent_color_a.flip_rgb();
+
+    //}
+
+    //circle_color = self.apptheme.colors_app.accent_color_a.shade(frac);
+
+    
     let mut visible_points: Vec<PointData> = vec![];
 
     for item in self.iplist.items.clone() {
@@ -187,13 +270,13 @@ impl<'a> Home<'a> {
     }
 
     canvas::Canvas::default()
-        .background_color(self.apptheme.colors.default_background)
+        .background_color(self.apptheme.colors_app.background_mid.color)
         .block(Block::default().borders(Borders::ALL).title("World").bg(self.apptheme.colors.default_background))
         .marker(Marker::Braille)
         .paint(move |ctx| {
             // draw map
             ctx.draw(&canvas::Map {
-                color: self.apptheme.colors.default_map_color,
+                color: self.apptheme.colors_app.map_color.color,
                 resolution: canvas::MapResolution::High,
             });
 
@@ -209,7 +292,7 @@ impl<'a> Home<'a> {
                 y1: self.home_lat,
                 x2,
                 y2,
-                color:self.apptheme.colors.accent_dblue,
+                color:self.apptheme.colors_app.accent_color_b_mid.color,
               }); 
               // draw animated line
               ctx.draw(&canvas::Line {
@@ -217,14 +300,14 @@ impl<'a> Home<'a> {
                 y1: y2 + dir.1 * map_range((0.,7.), (0.,1.), self.elapsed_frames),
                 x2,
                 y2,
-                color: self.apptheme.colors.accent_blue,
+                color:self.apptheme.colors_app.accent_color_b_bright.color,
               });
               // draw animated circle
               ctx.draw(&canvas::Circle {
                 x: x2, // lon
                 y: y2, // lat
                 radius: self.elapsed_frames,
-                color: self.apptheme.colors.accent_orange,
+                color: circle_color,//self.apptheme.colors.accent_orange,
               });
 
             }
@@ -234,12 +317,12 @@ impl<'a> Home<'a> {
                 x: self.home_lon, // lon
                 y: self.home_lat, // lat
                 radius: self.elapsed_frames,
-                color: self.apptheme.colors.accent_orange,
+                color: circle_color, //self.apptheme.colors_app.accent_color_a.color
               });
             }
             
             //ctx.print(self.last_lon, self.last_lat, "X".red());
-            ctx.print(self.home_lon, self.home_lat, Line::from(Span::styled("H", Style::default().fg(self.apptheme.colors.accent_orange))));
+            ctx.print(self.home_lon, self.home_lat, Line::from(Span::styled("H", Style::default().fg(self.apptheme.colors_app.accent_color_a.color))));
         })
         .x_bounds([-180.0, 180.0])
         .y_bounds([-90.0, 90.0])
@@ -279,19 +362,19 @@ impl<'a> Home<'a> {
 
     let mut querytext: Vec<Line> = vec![];
     let queryline =   Line::from(vec![
-      Span::styled(format!("Ban: {}", self.ipstring), self.apptheme.default_text_style) , 
-      Span::styled(querycursor, self.apptheme.fail2ban_bg)
+      Span::styled(format!("Ban: {}", self.ipstring), Style::default().fg(self.apptheme.colors_app.text_color.color)) , 
+      Span::styled(querycursor, Style::default().bg(self.apptheme.colors_app.background_brightest.color))
       ]);
     //queryline.patch_style(self.apptheme.selected_ip_bg);
     querytext.push(queryline);
     let mut queryerror =   Line::from(format!("Status: {}", self.iperror));
-    queryerror.patch_style(self.apptheme.default_background);
+    queryerror.patch_style(self.apptheme.styles_app.default_style);
     querytext.push(queryerror);
 
     let querybox = Paragraph::new(querytext)
     .set_style(Style::default())
     .block(Block::default()
-    .bg(self.apptheme.colors.lblack)
+    .bg(self.apptheme.colors_app.background_darkest.color)
     .borders(Borders::ALL)
     .title("Ban"));
     querybox
@@ -314,20 +397,20 @@ impl<'a> Home<'a> {
 
     let mut querytext: Vec<Line> = vec![];
     let queryline =   Line::from(vec![
-      Span::styled(format!("Unban: {}", self.ipstring), self.apptheme.default_text_style) , 
-      Span::styled(querycursor, self.apptheme.fail2ban_bg)
+      Span::styled(format!("Unban: {}", self.ipstring), Style::default().fg(self.apptheme.colors_app.text_color.color)) , 
+      Span::styled(querycursor, Style::default().bg(self.apptheme.colors_app.background_brightest.color))
       ]);
     //queryline.patch_style(self.apptheme.selected_ip_bg);
     querytext.push(queryline);
 
     let mut queryerror =   Line::from(format!("Status: {}", self.iperror));
-    queryerror.patch_style(self.apptheme.default_background);
+    queryerror.patch_style(self.apptheme.styles_app.default_style);
     querytext.push(queryerror);
 
     let querybox = Paragraph::new(querytext)
     .set_style(Style::default())
     .block(Block::default()
-    .bg(self.apptheme.colors.lblack)
+    .bg(self.apptheme.colors_app.background_darkest.color)
     .borders(Borders::ALL)
     .title("Unban"));
     querybox
@@ -456,6 +539,8 @@ impl Component for Home<'_> {
             'C'|'c' => {return Ok(Some(Action::ConfirmClearLists)) },
             'B'|'b' => {if self.displaymode == DisplayMode::Ban {return Ok(Some(Action::ExitBan))} else {return Ok(Some(Action::EnterBan))}},
             'U'|'u' => {if self.displaymode == DisplayMode::Unban {return Ok(Some(Action::ExitUnban))} else {return Ok(Some(Action::EnterUnban))}},
+            'M'|'m' => {if self.displaymode == DisplayMode::Map {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Map;} return Ok(Some(Action::Blank))},
+            'T'|'t' => {if self.displaymode == DisplayMode::Logs {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Logs;} return Ok(Some(Action::Blank))},
             // DrawMode switching
             'A'|'a' => {self.drawmode = DrawMode::All; return Ok(Some(Action::Blank))},
             'S'|'s' => {self.drawmode = DrawMode::Sticky; return Ok(Some(Action::Blank))},
@@ -465,7 +550,7 @@ impl Component for Home<'_> {
             'H'|'h' => {self.last_mode = self.mode; return Ok(Some(Action::LogsFirst))}, // top
             'K'|'k' => {self.last_mode = self.mode; return Ok(Some(Action::LogsNext))},  // down
             'L'|'l' => {self.last_mode = self.mode; return Ok(Some(Action::LogsLast))}, // bottom
-            'M'|'m' => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))}, // unselect
+            'N'|'n' => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))}, // unselect
             '+'|'-' => { return Ok(Some(Action::SetCapacity))}, // unselect
             // IP & Action Navigation
             // -- ArrowKeys
@@ -825,9 +910,9 @@ impl Component for Home<'_> {
 
   fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
     
-    if self.startup_complete && !self.showing_stats {
+    if self.startup_complete && !self.showing_stats && self.displaymode != DisplayMode::Map{
 
-      for item in &mut self.iplist.items {
+      for item in &mut self.iplist.items  {
         item.pointdata.decay_point(self.apptheme.decay_time);
       }
       
@@ -842,7 +927,7 @@ impl Component for Home<'_> {
         //self.infotext = String::from("");
       }
   
-      if self.elapsed_frames >= 8. {
+      if self.elapsed_frames >= self.anim_frames {
         self.elapsed_frames = 0.;
       }
   
@@ -857,10 +942,23 @@ impl Component for Home<'_> {
         .constraints([Constraint::Percentage(20), Constraint::Percentage(40), Constraint::Percentage(40)])
         .split(layout[0]);
   
-      let right_layout = Layout::default()
+      let mut right_layout = Layout::default()
+      .direction(Direction::Vertical)
+      .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+      .split(layout[1]);
+
+      if self.displaymode == DisplayMode::Logs{
+        right_layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .constraints([Constraint::Percentage(2), Constraint::Percentage(98)])
         .split(layout[1]);
+        f.render_widget(Paragraph::new("").bg(self.apptheme.colors_app.background_darkest.color), right_layout[0]);
+
+      } else {
+        // Ip not fullscreened logs show map
+        f.render_widget(self.map_canvas(&right_layout[0]), right_layout[0]);
+      }
+
   
       let actionlist = ui::create_action_list(self.available_actions.clone(), &self.apptheme, self.mode, self.last_mode, self.selected_ip.clone());
   
@@ -872,7 +970,7 @@ impl Component for Home<'_> {
         self.iostreamed_capacity, &self.apptheme, term_w, self.available_actions.clone(), self.selected_ip.clone(), self.elapsed_rticks.clone());
   
       // Draw Map to right_upper = 0
-      f.render_widget(self.map_canvas(&right_layout[0]), right_layout[0]);
+      
   
       // Draw Read file to right_lower = 1
       f.render_stateful_widget(iolist, right_layout[1], &mut self.stored_styled_iostreamed.state); // CHANGED 
@@ -941,7 +1039,58 @@ impl Component for Home<'_> {
 
 
     } else {
-      if !self.showing_stats { // Something should definitly be on screen
+      if self.startup_complete && !self.showing_stats && self.displaymode == DisplayMode::Map {
+        // Draw only Map
+        // Make new layout
+        for item in &mut self.iplist.items  {
+          item.pointdata.decay_point(self.apptheme.decay_time);
+        }
+        
+        self.elapsed_rticks += 1;
+        self.elapsed_frames += 1.;
+        //self.anim_charsoup.next();
+        const ANIMTICKS: usize = 4;
+        let animsymbols = vec!["|","/","―","\\"];
+        if self.elapsed_rticks >= ANIMTICKS {
+          self.elapsed_rticks = 0;
+          //self.infotext = String::from("");
+        }
+    
+        if self.elapsed_frames >= self.anim_frames {
+          self.elapsed_frames = 0.;
+        }
+
+
+        let term_h = area.height;
+        let mut rng = rand::thread_rng();
+        let frame_df = rand::distributions::Uniform::new(0, self.anim_charsoup_precalc.len() - 1);
+        let step = rand::distributions::Uniform::new(-1., 0.);
+        let mut bg_text: Vec<Line> = vec![];
+        for h in 0..term_h {   
+          let frame = frame_df.sample(&mut rng);
+          let selected_soup = self.anim_charsoup_precalc[frame].clone();
+          bg_text.push(selected_soup);
+        }
+
+
+        let map_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(5),Constraint::Percentage(90),Constraint::Percentage(5)])
+        .split(f.size());
+
+        //let num_lines: f32 = rng.gen_range(-1..1.);
+        f.render_widget(self.map_canvas(&map_layout[1]), map_layout[1]);
+        f.render_widget(Paragraph::new(bg_text.clone()).block(Block::default().border_style(self.apptheme.styles_app.border_style)).bg(self.apptheme.colors_app.background_darkest.color), map_layout[0]);
+        f.render_widget(Paragraph::new(bg_text).block(Block::default().border_style(self.apptheme.styles_app.border_style)).bg(self.apptheme.colors_app.background_darkest.color), map_layout[2]);
+
+
+
+
+
+    
+      }
+
+      if !self.showing_stats  && self.displaymode != DisplayMode::Map { // Something should definitly be on screen
         f.render_widget(Paragraph::new("You shouldn't see this, if you keep encountering this problem please create an issue referring to Code: E100"), area);
       }
     }

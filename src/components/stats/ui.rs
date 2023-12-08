@@ -307,8 +307,8 @@ pub fn make_overview_paragraph<'a>(
   ];
 
   let paragraph = Paragraph::new(lines);
-  paragraph.block(Block::default().borders(Borders::ALL).title(format!("{title} Overview")).bg(theme.colors_app.background_darkest).fg(theme.colors_app.text_color))
-  .set_style(Style::new().bg(theme.colors_app.background_darkest).fg(theme.colors_app.text_color))
+  paragraph.block(Block::default().borders(Borders::ALL).title(format!("{title} Overview")).bg(theme.colors_app.background_darkest.color).fg(theme.colors_app.text_color.color))
+  .set_style(Style::new().bg(theme.colors_app.background_darkest.color).fg(theme.colors_app.text_color.color))
 }
 
 /// Gather and validates data, wraps make_overview_paragraph()
@@ -349,8 +349,8 @@ pub fn make_country_overview(stats: &Stats) -> impl Widget + '_ {
       is_blocked,
     );
   }
-  paragraph.block(Block::default().borders(Borders::ALL).title("Country Stats").bg(stats.apptheme.colors_app.background_darkest).fg(stats.apptheme.colors_app.text_color))
-  .set_style(Style::new().bg(stats.apptheme.colors_app.background_darkest).fg(stats.apptheme.colors_app.text_color))
+  paragraph.block(Block::default().borders(Borders::ALL).title("Country Stats").bg(stats.apptheme.colors_app.background_darkest.color).fg(stats.apptheme.colors_app.text_color.color))
+  .set_style(Style::new().bg(stats.apptheme.colors_app.background_darkest.color).fg(stats.apptheme.colors_app.text_color.color))
 }
 
 pub fn make_region_overview(stats: &Stats) -> impl Widget + '_ {
@@ -390,8 +390,8 @@ pub fn make_region_overview(stats: &Stats) -> impl Widget + '_ {
     );
   }
   paragraph
-    .block(Block::default().borders(Borders::ALL).title("Region Stats").bg(stats.apptheme.colors_app.background_darkest).fg(stats.apptheme.colors_app.text_color))
-    .set_style(Style::new().bg(stats.apptheme.colors_app.background_darkest).fg(stats.apptheme.colors_app.text_color))
+    .block(Block::default().borders(Borders::ALL).title("Region Stats").bg(stats.apptheme.colors_app.background_darkest.color).fg(stats.apptheme.colors_app.text_color.color))
+    .set_style(Style::new().bg(stats.apptheme.colors_app.background_darkest.color).fg(stats.apptheme.colors_app.text_color.color))
 }
 
 pub fn make_city_overview(stats: &Stats) -> impl Widget + '_ {
@@ -429,8 +429,8 @@ pub fn make_city_overview(stats: &Stats) -> impl Widget + '_ {
       is_blocked,
     );
   }
-  paragraph.block(Block::default().borders(Borders::ALL).title("City Stats").bg(stats.apptheme.colors_app.background_darkest).fg(stats.apptheme.colors_app.text_color))
-  .set_style(Style::new().bg(stats.apptheme.colors_app.background_darkest).fg(stats.apptheme.colors_app.text_color))
+  paragraph.block(Block::default().borders(Borders::ALL).title("City Stats").bg(stats.apptheme.colors_app.background_darkest.color).fg(stats.apptheme.colors_app.text_color.color))
+  .set_style(Style::new().bg(stats.apptheme.colors_app.background_darkest.color).fg(stats.apptheme.colors_app.text_color.color))
 }
 
 pub fn make_isp_overview(stats: &Stats) -> impl Widget + '_ {
@@ -468,8 +468,8 @@ pub fn make_isp_overview(stats: &Stats) -> impl Widget + '_ {
       is_blocked,
     );
   }
-  paragraph.block(Block::default().borders(Borders::ALL).title("ISP Stats").bg(stats.apptheme.colors_app.background_darkest).fg(stats.apptheme.colors_app.text_color))
-  .set_style(Style::new().bg(stats.apptheme.colors_app.background_darkest).fg(stats.apptheme.colors_app.text_color))
+  paragraph.block(Block::default().borders(Borders::ALL).title("ISP Stats").bg(stats.apptheme.colors_app.background_darkest.color).fg(stats.apptheme.colors_app.text_color.color))
+  .set_style(Style::new().bg(stats.apptheme.colors_app.background_darkest.color).fg(stats.apptheme.colors_app.text_color.color))
 }
 
 pub fn make_ip_overview(theme: &Theme, sel_ip: IP) -> impl Widget + '_ {
@@ -490,7 +490,7 @@ pub fn make_ip_overview(theme: &Theme, sel_ip: IP) -> impl Widget + '_ {
   let isp = selected_ip.isp;
 
   let lines: Vec<Line> = vec![
-    Line::from(vec![Span::styled(format!(" Selected     :"), Style::default().bg(theme.colors_app.background_darkest))]),
+    Line::from(vec![Span::styled(format!(" Selected     :"), Style::default().bg(theme.colors_app.background_darkest.color))]),
     Line::from(vec![Span::styled(format!(" {}", ip), Style::default().fg(theme.colors.accent_lorange))]),
     Line::from(vec![if is_banned {
       Span::styled(format!(" Banned  "), Style::default().fg(theme.colors.accent_orange))
@@ -505,8 +505,8 @@ pub fn make_ip_overview(theme: &Theme, sel_ip: IP) -> impl Widget + '_ {
 
   let paragraph = Paragraph::new(lines);
 
-  paragraph.block(Block::default().borders(Borders::ALL).title("IP Stats").bg(theme.colors_app.background_darkest).fg(theme.colors_app.text_color))
-  .set_style(Style::new().bg(theme.colors_app.background_darkest).fg(theme.colors_app.text_color))
+  paragraph.block(Block::default().borders(Borders::ALL).title("IP Stats").bg(theme.colors_app.background_darkest.color).fg(theme.colors_app.text_color.color))
+  .set_style(Style::new().bg(theme.colors_app.background_darkest.color).fg(theme.colors_app.text_color.color))
 }
 
 // POPUPS // ---------------------------------------------------------------- //

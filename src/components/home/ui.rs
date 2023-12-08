@@ -9,15 +9,15 @@ pub fn create_internal_logs<'a>(home: &'a Home) -> List<'a> {
     .iter()
     .map(|i| {
         let line = Line::from(i.as_str()); // let mut lines = vec![Line::from(i.0)];
-        ListItem::new(line).style(home.apptheme.default_text_style)
+        ListItem::new(line).style(home.apptheme.styles_app.default_style.bg(home.apptheme.colors_app.background_darkest.color)).fg(home.apptheme.colors_app.text_color.shade(-0.5))
     })
     .collect();
 
   // Create a List from all list items and highlight the currently selected one
   let logslist = List::new(intlogs)
-    .bg(home.apptheme.colors.lblack)
-    .block(Block::default().borders(Borders::ALL).border_style(home.apptheme.border_style).title("INTERNAL LOG"))
-    .highlight_style(home.apptheme.highlight_item_style)
+    .bg(home.apptheme.colors_app.background_darkest.color)
+    .block(Block::default().borders(Borders::ALL).border_style(home.apptheme.styles_app.border_style).title("INTERNAL LOG"))
+    .highlight_style(home.apptheme.styles_app.highlight_item_style)
     .highlight_symbol(">> ");
   logslist
 }
@@ -47,20 +47,20 @@ pub fn create_io_list<'a>(
 
       let mut bg_style: Style;
       if i.1 == "Journal" {
-        bg_style = theme.journal_bg;
+        bg_style = Style::default().bg(theme.colors_app.background_darkest.color);
       } else {
-        bg_style = theme.fail2ban_bg;
+        bg_style = Style::default().bg(theme.colors_app.background_text_bright.color);
       }
 
       if i.2 == selected_ip {
-        bg_style = theme.selected_ip_bg;
+        bg_style = Style::default().bg(theme.colors_app.background_text_dark.color);
       }
 
       let line_w = line.width();
       if line_w < term_w {
         // fill line with whitespaces
         let dif = term_w - line_w;
-        let cspan = Span::styled(str::repeat(" ", dif), theme.default_text_style);
+        let cspan = Span::styled(str::repeat(" ", dif), Style::default().fg(theme.colors_app.text_color.color));
         line.spans.push(cspan);
       }
       line.patch_style(bg_style);
@@ -148,24 +148,24 @@ pub fn create_ip_list(iplist: StatefulList<IPListItem>, theme: &Theme, mode: Mod
             .italic()
             .into(),
       );
-      ListItem::new(lines).style(theme.default_text_style)
+      ListItem::new(lines).style(Style::default().fg(theme.colors_app.text_color.color))
   })
   .collect();
 
   // Create a List from all list items and highlight the currently selected one
   let iplist = List::new(ips)
-      .bg(theme.colors.lblack)
+      .bg(theme.colors_app.background_darkest.color)
       .block(Block::default()
       .borders(Borders::ALL)
       .border_style( 
         match mode {
-          Mode::Normal => {theme.active_border_style},
-          _ => {  let mut style = theme.border_style;
-            if last_mode == Mode::Normal {style = theme.active_border_style}
+          Mode::Normal => {theme.styles_app.active_border_style},
+          _ => {  let mut style = theme.styles_app.border_style;
+            if last_mode == Mode::Normal {style = theme.styles_app.active_border_style}
             style},
         })
       .title("Last IPs"))
-      .highlight_style(theme.highlight_item_style)
+      .highlight_style(theme.styles_app.highlight_item_style)
       .highlight_symbol(">> ");
     iplist
 }
@@ -197,24 +197,24 @@ pub fn create_action_list<'a>(available_actions:StatefulList<(&'a str, String)>,
       }
 
 
-      ListItem::new(lines).style(theme.default_text_style)
+      ListItem::new(lines).style(Style::default().fg(theme.colors_app.text_color.color))
   })
   .collect();
 
   // Create a List from all list items and highlight the currently selected one
   let actionlist = List::new(av_actions)
-      .bg(theme.colors.lblack)
+      .bg(theme.colors_app.background_darkest.color)
       .block(Block::default()
       .borders(Borders::ALL)
       .border_style( 
         match mode {
-          Mode::TakeAction => {theme.active_border_style},
-          _ => {  let mut style = theme.border_style;
-            if last_mode == Mode::TakeAction {style = theme.active_border_style}
+          Mode::TakeAction => {theme.styles_app.active_border_style},
+          _ => {  let mut style = theme.styles_app.border_style;
+            if last_mode == Mode::TakeAction {style = theme.styles_app.active_border_style}
             style},
         })
       .title("Actions"))
-      .highlight_style(theme.highlight_item_style)
+      .highlight_style(theme.styles_app.highlight_item_style)
       .highlight_symbol(">> ");
     actionlist
 }
@@ -236,11 +236,11 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
   // make text
   let mut helptext: Vec<Line> = vec![];
   let mut hheader =   Line::from(format!("---           HOTKEYS       ---                                                                 -"));
-  hheader.patch_style(home.apptheme.fail2ban_bg);
+  hheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
   helptext.push(hheader);
   helptext.push(                Line::from(format!("Key:          Name          Info")));
   let mut hheader =   Line::from(format!("---           General       ---                                                                 -"));
-  hheader.patch_style(home.apptheme.fail2ban_bg);
+  hheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
   helptext.push(hheader);    
   helptext.push(                Line::from(format!("Arrowkeys:    Select        Select item in IPs or Actions dependent on mode")));
   helptext.push(                Line::from(format!("Tab:          Mode          Switch Mode between IP-List & Actions")));
@@ -250,13 +250,13 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
   helptext.push(                Line::from(format!("C|c:          Clear         Clears IP and I/O Lists")));
   helptext.push(                Line::from(format!("Enter:        Execute       Context dependent selection or execution")));
   let mut hheader =   Line::from(format!("---           Drawmode      ---                                           {}                -", active_drawmode)); // for more spaces bc inserted string has six characters
-  hheader.patch_style(home.apptheme.fail2ban_bg);
+  hheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
   helptext.push(hheader);
   helptext.push(                Line::from(format!("A|a:          All           Draws all connections all the time")));
   helptext.push(                Line::from(format!("S|s:          Sticky        Draws only the selection connection")));
   helptext.push(                Line::from(format!("D|d:          Decay         Draws each connection for 10 seconds")));
   let mut ioheader =  Line::from(format!("---           I/O Stream    ---                                 Capacity: {}                -", home.iostreamed_capacity));
-  ioheader.patch_style(home.apptheme.fail2ban_bg);
+  ioheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
   helptext.push(ioheader);
   helptext.push(                Line::from(format!("H|h:          First         Select oldest line in I/O Streamed")));
   helptext.push(                Line::from(format!("J|j:          Previous      Select previous line in I/O Streamed")));
@@ -265,7 +265,7 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
   helptext.push(                Line::from(format!("N|n:          Unselect      Reset line selection in I/O Streamed")));
   helptext.push(                Line::from(format!("+|-:          Set Capacity  Input a new capacity for I/O Streamed")));
   let mut hheader =   Line::from(format!("---           IO-Mode       ---                                           {}                -", active_iomode)); // four more spaces bc inserted string has six characters
-  hheader.patch_style(home.apptheme.fail2ban_bg);
+  hheader.patch_style(Style::default().bg(home.apptheme.colors_app.background_text_bright.color));
   helptext.push(hheader);
   helptext.push(                Line::from(format!("F|f:          Follow        Auto-selects the last received IP")));
   helptext.push(                Line::from(format!("G|g:          Static        Selection stays where you left it")));   
@@ -273,7 +273,7 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
   let infoblock = Paragraph::new(helptext)
   .set_style(Style::default())
   .block(Block::default()
-  .bg(home.apptheme.colors.lblack)
+  .bg(home.apptheme.colors_app.background_darkest.color)
   .borders(Borders::ALL)
   .title("Help"));
   infoblock
@@ -287,20 +287,20 @@ pub fn create_query_popup<'a>(home: &'a Home)-> impl Widget + 'a {
 
   let mut querytext: Vec<Line> = vec![];
   let queryline =   Line::from(vec![
-    Span::styled(format!("Query: {}", home.querystring), home.apptheme.selected_ip_bg) , 
-    Span::styled(querycursor, home.apptheme.fail2ban_bg)
+    Span::styled(format!("Query: {}", home.querystring), Style::default().bg(home.apptheme.colors_app.background_text_dark.color).fg(home.apptheme.colors_app.text_color.color)) , 
+    Span::styled(querycursor, Style::default().bg(home.apptheme.colors_app.background_brightest.color).fg(home.apptheme.colors_app.text_color.color))
     ]);
   //queryline.patch_style(home.apptheme.selected_ip_bg);
   querytext.push(queryline);
 
   let mut queryerror =   Line::from(format!("Status: {}", home.queryerror));
-  queryerror.patch_style(home.apptheme.default_background);
+  queryerror.patch_style(Style::default().bg(home.apptheme.colors_app.background_mid.color));
   querytext.push(queryerror);
 
   let querybox = Paragraph::new(querytext)
   .set_style(Style::default())
   .block(Block::default()
-  .bg(home.apptheme.colors.lblack)
+  .bg(home.apptheme.colors_app.background_darkest.color)
   .borders(Borders::ALL)
   .title("Query"));
   querybox
@@ -311,11 +311,11 @@ pub fn create_clearlist_popup(theme: &Theme)  -> impl Widget + '_  {
 
   let mut clearlisttext: Vec<Line> = vec![];
   let clearlistline =   Line::from(vec![
-    Span::styled(format!("Press "), theme.default_text_style), 
-    Span::styled(format!("Y | y "), Style::default().fg(theme.colors.accent_lime)),
-    Span::styled(format!("to confirm or "), theme.default_text_style),
-    Span::styled(format!("N | n "), Style::default().fg(theme.colors.accent_orange)),
-    Span::styled(format!("to cancel."), theme.default_text_style),
+    Span::styled(format!("Press "), Style::default().fg(theme.colors_app.text_color.color)), 
+    Span::styled(format!("Y | y "), Style::default().fg(theme.colors_app.confirm_color.color)),
+    Span::styled(format!("to confirm or "), Style::default().fg(theme.colors_app.text_color.color)),
+    Span::styled(format!("N | n "), Style::default().fg(theme.colors_app.accent_color_a.color)),
+    Span::styled(format!("to cancel."), Style::default().fg(theme.colors_app.text_color.color)),
     ]);
   //clearlistline.patch_style(theme.selected_ip_bg);
   clearlisttext.push(clearlistline);
@@ -323,7 +323,7 @@ pub fn create_clearlist_popup(theme: &Theme)  -> impl Widget + '_  {
   let clearlistbox = Paragraph::new(clearlisttext)
   .set_style(Style::default())
   .block(Block::default()
-  .bg(theme.colors.lblack)
+  .bg(theme.colors_app.background_darkest.color)
   .borders(Borders::ALL)
   .title("Confirm to clear list"));
   clearlistbox
@@ -336,8 +336,8 @@ pub fn popup_set_io_capacity<'a>(anim_querycursor: Animation<&'a str>, theme: &T
 
   let mut capacitytext: Vec<Line> = vec![];
   let capacityline =   Line::from(vec![
-    Span::styled(format!("New Capacity: {}", capacity_input), theme.selected_ip_bg) , 
-    Span::styled(capacitycursor, theme.fail2ban_bg)
+    Span::styled(format!("New Capacity: {}", capacity_input), Style::default().bg(theme.colors_app.background_text_dark.color)) , 
+    Span::styled(capacitycursor, Style::default().bg(theme.colors_app.background_text_bright.color))
     ]);
   //capacityline.patch_style(theme.selected_ip_bg);
   capacitytext.push(capacityline);
@@ -345,7 +345,7 @@ pub fn popup_set_io_capacity<'a>(anim_querycursor: Animation<&'a str>, theme: &T
   let capacitybox = Paragraph::new(capacitytext)
   .set_style(Style::default())
   .block(Block::default()
-  .bg(theme.colors.lblack)
+  .bg(theme.colors_app.background_darkest.color)
   .borders(Borders::ALL)
   .title("Set I/O Stream capacity"));
   capacitybox

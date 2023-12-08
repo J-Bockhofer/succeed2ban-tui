@@ -33,6 +33,8 @@ pub enum DisplayMode {
   SetIOCapacity,
   Ban,
   Unban,
+  Map,
+  Logs,
 }
 
 #[derive(Default, Copy, Clone, PartialEq, Eq)]

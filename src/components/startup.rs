@@ -86,12 +86,15 @@ pub struct Startup <'a>{
 
   // tmp
   last_ip: String,
+  fetching_ips:Vec<String>,
   //stored_geo: Vec<ip::IP>,
 
   // startup line
   startup_lines: Vec<&'a str>,
 
   available_themes: StatefulList<ThemeContainer>,
+
+  
 
 }
 
@@ -131,7 +134,7 @@ impl <'a> Startup <'a> {
     -#4.f,f&))â07c-9,l)c&#4g,/c%)â%h
     lf0ß4dl09f7/mms#.d2hmf44gf-c-10m"]);
     self.countdown_to_start = 10;
-
+    self.fetching_ips = vec![];
     self.available_themes.items = themes::Themes::default().theme_collection;
     self
   }
@@ -427,9 +430,11 @@ impl Component for Startup <'_> {
 
             let req_ip = cip.to_string();
             let sender = self.action_tx.clone().unwrap();
-
+            self.fetching_ips.push(req_ip.clone());
+            
             let handle = tokio::task::spawn(async move {
               // perform some work here...
+              
               let geodat = geofetcher::fetch_geolocation(req_ip.as_str()).await.unwrap_or(serde_json::Value::default());
 
               let geoip = String::from(geodat.get("query").unwrap().as_str().unwrap());
@@ -844,7 +849,7 @@ impl Component for Startup <'_> {
             .paint( |ctx| {
    
                 ctx.draw(&canvas::Map {
-                    color: self.apptheme.colors.default_map_color,
+                    color: self.apptheme.colors_app.map_color.color,
                     resolution: canvas::MapResolution::High,
                 });
 
@@ -857,7 +862,7 @@ impl Component for Startup <'_> {
                         y1: point.1,
                         x2: point.2,
                         y2: point.3,
-                        color:self.apptheme.colors.accent_dblue,
+                        color:self.apptheme.colors_app.accent_color_b_mid.color,
                       }); 
           
                       ctx.draw(&canvas::Line {
@@ -865,7 +870,7 @@ impl Component for Startup <'_> {
                         y1: point.3 + direction.1 * map_range((0.,11.), (0.,0.9), self.elapsed_frames),
                         x2: point.2,
                         y2: point.3,
-                        color: self.apptheme.colors.accent_blue,
+                        color: self.apptheme.colors_app.accent_color_b_bright.color,
                       });                    
 
                 } 
@@ -874,8 +879,8 @@ impl Component for Startup <'_> {
                 ctx.draw(&canvas::Circle {
                     x: 0., // lon
                     y: 0., // lat
-                    radius:  self.render_ticker as f64,
-                    color: self.apptheme.colors.accent_orange,
+                    radius:  self.elapsed_frames,
+                    color: self.apptheme.colors_app.accent_color_a.color,
                   });
 
             })
@@ -884,21 +889,36 @@ impl Component for Startup <'_> {
 
             let frame_idx = self.anim_charsoup.state.selected().unwrap_or_default();
             let selected_soup = self.anim_charsoup.keyframes[frame_idx];
+            let chars: Vec<char> = selected_soup.chars().collect();
+
+            let mut rng = rand::thread_rng();
+            //let num_lines: f32 = rng.gen_range(-1..1.);
+            let step = rand::distributions::Uniform::new(-1., 0.);
             
+
+            let vecspan: Vec<Span> = chars.into_iter().map(|char|{
+              let choice = step.sample(&mut rng) as f32;
+              let color = self.apptheme.colors_app.text_color.shade(choice);
+              let char = format!("{}",char);
+              Span::styled(char, self.apptheme.default_text_style.fg(color))
+            }).collect();
+
+            //let soupline = Line::from(vecspan);
             
             let frame_idx = self.anim_dotdotdot.state.selected().unwrap_or_default();
             let selected_frame = self.anim_dotdotdot.keyframes[frame_idx];
 
             let mut loglines: Vec<Line> = vec![];
             loglines.push(Line::from(format!("Countdown to start: {}", self.countdown_to_start)));
-            loglines.push(Line::from(Span::styled(format!("          --             "), self.apptheme.fail2ban_bg)));
+            loglines.push(Line::from(Span::styled(format!("          --             "), self.apptheme.styles_app.default_style.bg(self.apptheme.colors_app.background_brightest.color))));
 
             let num_msgs = self.log_messages.len();
             for i in 0..num_msgs {
               
               if i == num_msgs - 1 {
                 loglines.push(Line::from(format!("{}{}", self.log_messages[i], selected_frame)));
-                loglines.push(Line::from(format!("{}", selected_soup)));
+                //loglines.push(Line::from(format!("{}", selected_soup)));
+                loglines.push(Line::from(vecspan.clone()));
               } else {
                 loglines.push(Line::from(format!("{}", self.log_messages[i])));
               }
@@ -913,18 +933,18 @@ impl Component for Startup <'_> {
             .iter()
             .map(|i| {
                 let line = Line::from(i.name.clone());
-                ListItem::new(line).style(self.apptheme.default_text_style)
+                ListItem::new(line).style(Style::default().fg(self.apptheme.colors_app.text_color.color))
             })
             .collect();
         
             // Create a List from all list items and highlight the currently selected one
             let themeslist = List::new(av_themes)
-                .bg(self.apptheme.colors.lblack)
+                .bg(self.apptheme.colors_app.background_darkest.color)
                 .block(Block::default()
                 .borders(Borders::ALL)
-                .border_style( self.apptheme.active_border_style)
+                .border_style( self.apptheme.styles_app.active_border_style)
                 .title("Themes"))
-                .highlight_style(self.apptheme.highlight_item_style)
+                .highlight_style(self.apptheme.styles_app.highlight_item_style)
                 .highlight_symbol(">> ");
 
             f.render_stateful_widget(themeslist, sublayout[1], &mut self.available_themes.state);
@@ -936,10 +956,10 @@ impl Component for Startup <'_> {
                       .title("Setting up")
                       .title_alignment(Alignment::Center)
                       .borders(Borders::ALL)
-                      .border_style(self.apptheme.border_style)
+                      .border_style(self.apptheme.styles_app.border_style)
                       .border_type(BorderType::Rounded),
                   )
-                  .style(self.apptheme.default_text_style).bg(self.apptheme.colors.lblack) //self.apptheme.colors.accent_blue
+                  .style(self.apptheme.styles_app.default_style).bg(self.apptheme.colors_app.background_darkest.color) //self.apptheme.colors.accent_blue
                   .alignment(Alignment::Left),
                 sublayout[0],
               );

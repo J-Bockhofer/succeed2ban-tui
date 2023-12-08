@@ -6,6 +6,8 @@ use regex::Regex;
 use::serde::{Deserialize, Serialize};
 
 use std::iter::Map;
+
+use self::colors::ColorRGB;
 //use std::collections::HashMap;
 
 pub mod colors;
@@ -139,57 +141,60 @@ impl ThemeColors {
 #[derive(Clone)]
 pub struct AppColors {
     // Background
-    pub background_darkest: Color,
-    pub background_mid: Color,
-    pub background_brightest: Color,
+    pub background_darkest: ColorRGB,
+    pub background_mid: ColorRGB,
+    pub background_brightest: ColorRGB,
 
     // 
-    pub text_color: Color,
-    pub border_color: Color,
+    pub text_color: ColorRGB,
+    pub border_color: ColorRGB,
 
-    pub map_color: Color,
-    pub warn_color: Color,
-    pub confirm_color: Color,
+    pub map_color: ColorRGB,
+    pub warn_color: ColorRGB,
+    pub error_color: ColorRGB,
+    pub confirm_color: ColorRGB,
 
-    pub accent_color_a: Color,
-    pub accent_color_a_var: Color,
+    pub accent_color_a: ColorRGB,
+    pub accent_color_a_var: ColorRGB,
 
-    pub accent_color_b_dark: Color,
-    pub accent_color_b_mid: Color,
-    pub accent_color_b_bright: Color,
+    pub accent_color_b_dark: ColorRGB,
+    pub accent_color_b_mid: ColorRGB,
+    pub accent_color_b_bright: ColorRGB,
 
-    pub background_text_bright: Color,
-    pub background_text_dark: Color,
+    pub background_text_bright: ColorRGB,
+    pub background_text_dark: ColorRGB,
 
 }
 
 impl Default for AppColors {
   fn default() -> Self {
       AppColors { 
-        background_darkest: colors::LBLACK, 
-        background_mid: colors::BACKGROUND,  
-        background_brightest: Color::Rgb(48, 48, 48), 
-        text_color: Color::White, 
-        border_color: Color::White, 
-        map_color: Color::Rgb(139,139,141), 
-        warn_color: colors::ACCENT_WRED, 
-        confirm_color: colors::ACCENT_LIME, 
-        accent_color_a: colors::ACCENT_ORANGE, 
-        accent_color_a_var: colors::ACCENT_LORANGE, 
-        accent_color_b_dark: colors::DDBLUE, 
-        accent_color_b_mid: colors::ACCENT_DBLUE, 
-        accent_color_b_bright: colors::ACCENT_BLUE, 
-        background_text_bright: Color::Rgb(48, 48, 48),
-        background_text_dark: colors::EMPTY,
+        background_darkest: ColorRGB::from_color(colors::LBLACK).unwrap(), 
+        background_mid: ColorRGB::from_color(colors::BACKGROUND).unwrap(),  
+        background_brightest: ColorRGB::from_color(Color::Rgb(48, 48, 48)).unwrap(), 
+        text_color: ColorRGB::from_color(Color::White).unwrap(), 
+        border_color: ColorRGB::from_color(Color::White).unwrap(), 
+        map_color: ColorRGB::from_color(Color::Rgb(139,139,141)).unwrap(), 
+        warn_color: ColorRGB::from_color(colors::ACCENT_WRED).unwrap(), 
+        error_color: ColorRGB::from_color(colors::ACCENT_LPINK).unwrap(),
+        confirm_color: ColorRGB::from_color(colors::ACCENT_LIME).unwrap(), 
+        accent_color_a: ColorRGB::from_color(colors::ACCENT_ORANGE).unwrap(), 
+        accent_color_a_var: ColorRGB::from_color(colors::ACCENT_LORANGE).unwrap(), 
+        accent_color_b_dark: ColorRGB::from_color(colors::DDBLUE).unwrap(), 
+        accent_color_b_mid: ColorRGB::from_color(colors::ACCENT_DBLUE).unwrap(), 
+        accent_color_b_bright: ColorRGB::from_color(colors::ACCENT_BLUE).unwrap(), 
+        background_text_bright: ColorRGB::from_color(Color::Rgb(48, 48, 48)).unwrap(),
+        background_text_dark: ColorRGB::from_color(colors::EMPTY).unwrap(),
        }
   }
 }
 
 #[derive(Clone)]
 pub struct AppStyles {
-  border_style: Style,
-  active_border_style: Style,
-  highlight_item_style: Style,
+  pub border_style: Style,
+  pub active_border_style: Style,
+  pub highlight_item_style: Style,
+  pub default_style: Style,
 }
 impl Default for AppStyles {
   fn default() -> Self {
@@ -197,15 +202,18 @@ impl Default for AppStyles {
 
     AppStyles { 
       border_style: Style::new()
-        .bg(default_colors.background_darkest)
-        .fg(default_colors.border_color), 
+        .bg(default_colors.background_darkest.color)
+        .fg(default_colors.border_color.color), 
       active_border_style: Style::new()
-        .bg(default_colors.background_darkest)
-        .fg(default_colors.accent_color_a),
+        .bg(default_colors.background_darkest.color)
+        .fg(default_colors.accent_color_a.color),
       highlight_item_style: Style::new()
-        .fg(default_colors.background_text_dark)
-        .bg(default_colors.accent_color_b_bright)
-        .add_modifier(Modifier::BOLD) }
+        .fg(default_colors.background_text_dark.color)
+        .bg(default_colors.accent_color_b_bright.color)
+        .add_modifier(Modifier::BOLD),
+      default_style: Style::new()
+        .fg(default_colors.text_color.color)
+        .bg(default_colors.background_mid.color),}
   }
 }
 
@@ -351,45 +359,45 @@ impl Default for Theme {
         let styles = AppStyles::default();
         Theme { word_style_map: 
           WordStyleMap{ word_styles: vec![
-                    WordStylePair::new(String::from("Found"), Style::default().fg(colors.accent_color_a)),
-                    WordStylePair::new(String::from("Ban"), Style::default().fg(colors.accent_color_a)),
-                    WordStylePair::new(String::from("INFO"), Style::default().fg(colors.accent_color_b_mid)),
-                    WordStylePair::new(String::from("WARNING"), Style::default().fg(colors::ACCENT_LPINK)),
-                    WordStylePair::new(String::from("NOTICE"), Style::default().fg(colors.confirm_color)),
-                    WordStylePair::new(String::from("user"), Style::default().fg(colors.accent_color_b_bright)),
-                    WordStylePair::new(String::from("fatal:"), Style::default().fg(colors.accent_color_a)),
-                    WordStylePair::new(String::from("Accepted"), Style::default().fg(colors.confirm_color)),
+                    WordStylePair::new(String::from("Found"), Style::default().fg(colors.accent_color_a.color)),
+                    WordStylePair::new(String::from("Ban"), Style::default().fg(colors.accent_color_a.color)),
+                    WordStylePair::new(String::from("INFO"), Style::default().fg(colors.accent_color_b_mid.color)),
+                    WordStylePair::new(String::from("WARNING"), Style::default().fg(colors.error_color.color)),
+                    WordStylePair::new(String::from("NOTICE"), Style::default().fg(colors.confirm_color.color)),
+                    WordStylePair::new(String::from("user"), Style::default().fg(colors.accent_color_b_bright.color)),
+                    WordStylePair::new(String::from("fatal:"), Style::default().fg(colors.accent_color_a.color)),
+                    WordStylePair::new(String::from("Accepted"), Style::default().fg(colors.confirm_color.color)),
                 ]
             }, 
             regex_style_map: 
             RegexStyleMap{ regex_styles: vec![
-                RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors.accent_color_b_bright)), // IP v4
-                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors.accent_color_b_bright)), // Timestamp HH:MM:SS
+                RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors.accent_color_b_bright.color)), // IP v4
+                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors.accent_color_b_bright.color)), // Timestamp HH:MM:SS
                 //RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors::ACCENT_BLUE)), // Timestamp HH:MM:SS
             ]},
             //default_text_style: Style::default().fg(Color::White),
-            default_text_style: Style::default().fg(colors.text_color),
-            username_style: Style::default().fg(colors.accent_color_a),
-            default_background: Style::default().bg(colors.background_mid),
+            default_text_style: Style::default().fg(colors.text_color.color),
+            username_style: Style::default().fg(colors.accent_color_a.color),
+            default_background: Style::default().bg(colors.background_mid.color),
             border_style: styles.border_style,
             active_border_style: styles.active_border_style,
-            journal_bg: Style::default().bg(colors.background_darkest),
-            fail2ban_bg: Style::default().bg(colors.background_text_bright),
-            selected_ip_bg: Style::default().bg(colors.background_text_dark),
+            journal_bg: Style::default().bg(colors.background_darkest.color),
+            fail2ban_bg: Style::default().bg(colors.background_text_bright.color),
+            selected_ip_bg: Style::default().bg(colors.background_text_dark.color),
             ipregex: Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(),
             highlight_item_style: styles.highlight_item_style,
             colors: ThemeColors { 
-                default_background: colors.background_mid, 
-                default_map_color: colors.map_color, 
-                accent_blue: colors.accent_color_b_bright, 
-                accent_orange: colors.accent_color_a,
-                accent_lorange: colors.accent_color_a_var,
-                accent_dblue: colors.accent_color_b_mid,
-                accent_wred: colors.warn_color,
-                accent_lpink: colors::ACCENT_LPINK,
-                accent_lime: colors.confirm_color,
-                lblack: colors.background_darkest,
-                ddblue: colors.accent_color_b_dark,
+                default_background: colors.background_mid.color, 
+                default_map_color: colors.map_color.color, 
+                accent_blue: colors.accent_color_b_bright.color, 
+                accent_orange: colors.accent_color_a.color,
+                accent_lorange: colors.accent_color_a_var.color,
+                accent_dblue: colors.accent_color_b_mid.color,
+                accent_wred: colors.warn_color.color,
+                accent_lpink: colors.error_color.color,
+                accent_lime: colors.confirm_color.color,
+                lblack: colors.background_darkest.color,
+                ddblue: colors.accent_color_b_dark.color,
             },
             decay_time: tokio::time::Duration::from_secs(10),
             symbol_db: String::from("¤"), // 💽 💾 ⏫ ⌂
@@ -397,7 +405,7 @@ impl Default for Theme {
             symbol_block: String::from("✋"), // 👊 // 👏  👌 👂 ⛩ 👓 📈  🔛 🔃
             symbol_error: String::from("⚠️"), // ⚠️ 👨‍🔧 🤖  
             symbol_unblock: String::from("🔛"),
-            symbol_ban: String::from("❌"),
+            symbol_ban: String::from("✋"),
 
             colors_app: colors,
             styles_app: styles,
