@@ -2,3 +2,4 @@
 .data/*.log
 /src/oldcode
 *.db
+perf.data
