@@ -1,4 +1,4 @@
-# Succed2Ban-tui
+# succed2Ban-tui
 
 Made with [ratatui](https://github.com/ratatui-org/ratatui/) 
 
@@ -21,9 +21,9 @@ Issues / Todos:
 
 ## Usage
 
-1. Cargo run
+1. cargo run
 
-2. Start
+2. Press Tab to skip Startup menu
 
 3. Start fail2ban and/or journalctl watcher
 
@@ -32,7 +32,7 @@ Issues / Todos:
 
 ![Main](Main_help.PNG)
 
-## Detailed About
+## About
 
 I once had trouble setting up fail2ban so I had to spent some time looking at logs, so I thought why not spent some more time looking at logs?
 I then build a similar app in Python, which was much more limited and limiting. 
