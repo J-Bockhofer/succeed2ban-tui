@@ -1,4 +1,4 @@
-# succed2Ban-tui
+# succeed2Ban-tui
 
 Made with [ratatui](https://github.com/ratatui-org/ratatui/) 
 

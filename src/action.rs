@@ -10,7 +10,17 @@ use serde::{
   Deserialize, Serialize,
 };
 
-//pub enum 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum InputAction { // take stuff from main Action enum?
+  ToggleMap,
+  ToggleStats,
+  ToggleHelp,
+  ToggleQuery,
+  ToggleBan,
+  ToggleLogs,
+  SetIOCapacity,
+
+} 
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
