@@ -850,7 +850,7 @@ impl Component for Startup <'_> {
 
             let canvas = canvas::Canvas::default()
             .background_color(self.apptheme.colors_app.background_mid.color)
-            .block(Block::default().borders(Borders::ALL).title("World").bg(self.apptheme.colors_app.background_mid.color))
+            .block(Block::default().borders(Borders::ALL).title("").bg(self.apptheme.colors_app.background_mid.color))
             .marker(Marker::Braille)
             .paint( |ctx| {
    
@@ -922,8 +922,8 @@ impl Component for Startup <'_> {
 
             let mut loglines: Vec<Line> = vec![];
             loglines.push(Line::from(format!("Countdown to start: {}", self.countdown_to_start)));
-            loglines.push(Line::from(Span::styled(format!("          --             "), self.apptheme.styles_app.default_style.bg(self.apptheme.colors_app.background_brightest.color))));
-
+            //loglines.push(Line::from(Span::styled(format!("          --             "), self.apptheme.styles_app.default_style.bg(self.apptheme.colors_app.background_brightest.color))));
+            loglines.push(Line::from(format!("")));
             let num_msgs = self.log_messages.len();
             for i in 0..num_msgs {
               

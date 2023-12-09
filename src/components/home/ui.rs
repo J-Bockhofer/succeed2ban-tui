@@ -48,7 +48,7 @@ pub fn create_io_list<'a>(
       let mut bg_style: Style;
       if i.1 == "Journal" {
         if theme.is_light {
-          bg_style = Style::default().bg(theme.colors_app.background_darkest.shade(-0.16));
+          bg_style = Style::default().bg(theme.colors_app.background_darkest.color);
          } else {
           bg_style = Style::default().bg(theme.colors_app.background_darkest.color);
         }
@@ -191,21 +191,28 @@ pub fn create_action_list<'a>(available_actions:StatefulList<(&'a str, String)>,
       if i.0 == "Ban" || i.0 == "Unban"
       {
         lines.push(
-          format!("X - {}", selected_ip)
+          format!("   {}", selected_ip)
               .italic()
               .into(),
         );          
       }
-      else {
+      else if i.0 == "monitor-fail2ban" || i.0 == "monitor-journalctl"{
         let mut symb = "X";
         if i.1 == String::from("active") {
           symb = "✓";
         }
         lines.push(
-            format!("{} - {}", symb, i.1)
+            format!("   {} - {}", symb, i.1)
             .italic()
             .into(),
         );            
+      }
+      else {
+        lines.push(
+          format!("   Hotkey: {}", i.1)
+          .italic()
+          .into(),
+      ); 
       }
 
 

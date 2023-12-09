@@ -539,9 +539,13 @@ pub fn popup_help(theme: &Theme) -> impl Widget + '_ {
   helptext.push(Line::from(Span::styled(format!("E|e:          Back          Return to main screen"), linestyle_alt)));
   helptext.push(Line::from(Span::styled(format!("B|b:          Block         Blocks all IPs for selected"), linestyle)));
   helptext.push(Line::from(Span::styled(format!("U|u:          Unblock       Lifts the Block for selected"), linestyle_alt)));
-  helptext.push(Line::from(Span::styled(format!("A|a:          SortABC       Sorts selected List by Alpha-Num"), linestyle)));
-  helptext.push(Line::from(Span::styled(format!("S|s:          SortWarn      Sorts selected List by number of warnings"), linestyle_alt)));
-  helptext.push(Line::from(Span::styled(format!("D|d:          SortBlock     Sorts selected List by blocked / unblocked"), linestyle)));
+  let mut hheader = Line::from(format!("---           Sorting      ---                                                                 -"
+  ));
+  hheader.patch_style(headerstyle);
+  helptext.push(hheader);  
+  helptext.push(Line::from(Span::styled(format!("A|a:          ABC           Sorts selected List by Alpha-Numeric"), linestyle)));
+  helptext.push(Line::from(Span::styled(format!("S|s:          Warn          Sorts selected List by number of warnings"), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!("D|d:          Block         Sorts selected List by blocked / unblocked"), linestyle)));
 
   let infoblock = Paragraph::new(helptext)
   .set_style(Style::default())

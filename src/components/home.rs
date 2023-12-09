@@ -152,9 +152,9 @@ impl<'a> Home<'a> {
       ("Unban", String::from("some ip")),
       ("monitor-journalctl", String::from("inactive")),
       ("monitor-fail2ban", String::from("inactive")),
-      ("Stats", String::from("E | e")),
-      ("Query", String::from("Q | q")),
-      ("Help", String::from("W | w")),
+      ("Stats", String::from(" E ")),
+      ("Query", String::from(" Q ")),
+      ("Help", String::from(" W ")),
       ("Exit", String::from("Esc | Ctrl+C")),
     ]);
     self.last_lat = 53.0416;

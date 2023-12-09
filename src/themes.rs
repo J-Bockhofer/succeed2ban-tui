@@ -349,7 +349,7 @@ impl Theme {
             regex_style_map: 
             RegexStyleMap{ regex_styles: vec![
                 RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors.accent_color_a.color)), // IP v4
-                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors.warn_color.color)), // Timestamp HH:MM:SS
+                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors.accent_color_a.color)), // Timestamp HH:MM:SS
             ]},
             ipregex: Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(),
             decay_time: tokio::time::Duration::from_secs(10),
