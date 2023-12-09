@@ -2,6 +2,8 @@
 
 Made with [ratatui](https://github.com/ratatui-org/ratatui/) 
 
+![VHS](demo.gif)
+
 ## Short
 
 Overcomplicated way to tail -f your SSH logs.
@@ -17,12 +19,6 @@ Issues / Todos:
 5. Tests are failing bc DB tests need to be run sequentially
 6. Text wrapping
 
-
-## VHS 
-
-![VHS](demo. gif) / ! [](demo. gif)
-
-
 ## Usage
 
 1. Cargo run
@@ -34,7 +30,7 @@ Issues / Todos:
 4. Watch
 
 
-![Main](Main_help. PNG) / ! [](Main_help. PNG)
+![Main](Main_help.PNG)
 
 ## Detailed About
 
@@ -47,7 +43,8 @@ It fetches geodata for incoming IPs from [ip-api.com](https://ip-api.com/).
 Stores geodata in a SQLite file in order to keep necessary requests to a minimum and to review log statistics.
 
 ### Stat screen
-![Stats](Stats. PNG) / ! [](Stats. PNG)
+
+![Stats](Stats.PNG)
 
 Allows for blocking based on:
 
