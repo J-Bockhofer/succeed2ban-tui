@@ -2,7 +2,7 @@
 
 Made with [ratatui](https://github.com/ratatui-org/ratatui/) 
 
-![VHS](demo.gif)
+![VHS](Map.PNG)
 
 ## Short
 
@@ -12,11 +12,11 @@ Only made for myself to learn Rust, use at own discretion.
 
 Issues / Todos:
 
-1. Stopping of watchers does not work without Ctrl+C after shutdown
+1. Stopping of watchers does not work without Ctrl+C after shutdown !!!
 2. Some colors may default to default terminal colors which breaks the theme
 3. Actions need refactor badly
 4. Configuration of fail2ban log path and Hotkeys
-5. Tests are failing bc DB tests need to be run sequentially
+5. Refactor for testing
 6. Text wrapping
 
 ## Usage

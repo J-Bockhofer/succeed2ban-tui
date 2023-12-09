@@ -45,11 +45,9 @@ use regex::Regex;
 pub struct Home<'a> {
   command_tx: Option<UnboundedSender<Action>>,
   config: Config,
-  //items: StatefulList<(&'a str, usize)>,
+
   available_actions: StatefulList<(&'a str, String)>,
-  //iostreamed: StatefulList<(String, usize)>, // do i need a tuple here? // CHANGED
-  //iostreamed: Vec<(String, usize)>,
-  
+
   pub last_events: Vec<KeyEvent>,
   pub keymap: HashMap<KeyEvent, Action>,
   pub input: Input,
@@ -84,7 +82,6 @@ pub struct Home<'a> {
 
                                                       //f2b or journal // IP
   stored_styled_iostreamed: StatefulList<(StyledLine, String, String)>,
-  //stored_styled_iostreamed: StatefulList<IOListItem>, Todo ?
   iostreamed_capacity: usize,
   iostreamed_capacity_input: String,
 

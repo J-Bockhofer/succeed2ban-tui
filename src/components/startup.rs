@@ -76,7 +76,7 @@ pub struct Startup <'a>{
   // db connection,
   dbconn: Option<Connection>,
 
-  // Loading Ops
+  
   log_messages: Vec<String>,
 
 

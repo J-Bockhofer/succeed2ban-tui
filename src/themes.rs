@@ -115,29 +115,7 @@ impl RegexStyleMap {
 
 }
 
-#[derive(Default, Clone)]
-pub struct ThemeColors {
-    pub default_background: Color,
-    pub default_map_color: Color,
 
-    pub accent_blue: Color,
-    pub accent_orange: Color,
-    pub accent_lorange: Color,
-    pub accent_dblue: Color,
-    pub accent_wred: Color,
-    pub accent_lpink: Color,
-    pub accent_lime: Color,
-
-    pub lblack: Color,
-    pub ddblue: Color,
-
-}
-
-impl ThemeColors {
-    pub fn new() -> Self {
-        ThemeColors::default()
-    }
-}
 #[derive(Clone)]
 pub struct AppColors {
     // Background
@@ -392,7 +370,6 @@ impl Default for Themes {
         Themes { theme_collection: vec![
             ThemeContainer::new("Dark".to_string(), Theme::default()),
             ThemeContainer::new("Paper".to_string(), Theme::paper()),
-            //ThemeContainer::new("DefaultLight".to_string(), Theme::default_light()),
         ] }
 
     }

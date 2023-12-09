@@ -111,7 +111,7 @@ pub enum Action {
   StartupCreateDB,
   StartupDone,
   StartupGotHome(IP),
-  // Select Theme, by themename by i dont know how to send an enum through another enum
+  // Select Theme, by themename 
   SelectTheme(String),
 
   // Stats
