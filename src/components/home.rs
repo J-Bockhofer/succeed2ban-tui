@@ -777,10 +777,10 @@ impl Component for Home<'_> {
       Action::EnterQuery => {self.last_mode = self.mode; self.mode = Mode::Query; self.displaymode = DisplayMode::Query;},
       Action::ExitQuery => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
       Action::EnterBan => {self.last_mode = self.mode; self.mode = Mode::Ban; self.iperror = String::default(); self.displaymode = DisplayMode::Ban;},
-      Action::ExitBan => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal; self.ipstring = String::from("");},
+      Action::ExitBan => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal; self.ipstring = String::from("")},
       Action::EnterUnban => {self.last_mode = self.mode; self.mode = Mode::Unban; self.iperror = String::default(); self.displaymode = DisplayMode::Unban;},
-      Action::ExitUnban => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal; self.ipstring = String::from("");},
-      Action::InternalLog(x) => {self.internal_logs.items.push(x); self.internal_logs.trim_to_length(10); self.internal_logs.next();},
+      Action::ExitUnban => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal; self.ipstring = String::from("")},
+      Action::InternalLog(x) => {self.internal_logs.items.push(x); self.internal_logs.trim_to_length(10); self.internal_logs.next()},
       Action::StartupGotHome(x) => {
         let lat = x.lat.clone().parse::<f64>().unwrap();
         let lon = x.lon.clone().parse::<f64>().unwrap();

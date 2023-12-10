@@ -11,17 +11,17 @@
       "<t>": "Logs", // Maximize Logs 
       "<m>": "Map", // Maximize Map 
       "<c>": "Clear", // Clear current lists
-      "<b>": "Ban", // Ban IP
-      "<u>": "Unban", // Unban IP
+      "<b>": "Ban", // Ban IP (Follow Mode Static if you want to insert a random IP)
+      "<u>": "Unban", // Unban IP (Follow Mode Static if you want to insert a random IP)
 
       // Follow Mode
-      "<f>": "Follow",
-      "<g>": "Static",      
+      "<f>": "Follow", // Selection jumps to received IP
+      "<g>": "Static", // Selection stays in place     
 
       // Draw Mode
-      "<a>": "DrawAll",
-      "<s>": "DrawSticky",
-      "<d>": "DrawDecay",
+      "<a>": "DrawAll", // Draws connection lines for all IPs in IP List
+      "<s>": "DrawSticky", // Draws connection line for selected IP only
+      "<d>": "DrawDecay", // Draws connection lines on a timer, will stay active for 10sec after selection
 
       // IO Stream
       "<h>": "First",

@@ -343,6 +343,7 @@ impl App {
         // tui.mouse(true);
         tui.enter()?;
       } else if self.should_quit {
+        // cancel running tasks here
         tui.stop()?;
         break;
       }

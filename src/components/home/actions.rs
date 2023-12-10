@@ -141,7 +141,7 @@ pub fn parse_passed_geo(home: &mut Home, x: IP, y: String, z: bool) -> Result<()
       }
     }
   }
-  home.command_tx.clone().unwrap().send(Action::Render)?;
+  home.command_tx.clone().unwrap().send(Action::Render)?; // or Action::Tick ?
   Ok(())
 }
 

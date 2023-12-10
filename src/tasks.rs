@@ -170,3 +170,61 @@ pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, mut cancel_rx:
 
 
 
+pub async fn monitor_journalctl_2(event_tx:UnboundedSender<Action>, _cancellation_token: CancellationToken) -> Result<()> {
+
+
+  let argus = vec!["-n", "1", "-f", "-u", "ssh"];
+  let mut command = Command::new("journalctl");
+
+  tokio::spawn(async move {
+
+    // closure needs a sender to send to new string and a receiver to terminate the process
+    let mut tick_interval = tokio::time::interval(std::time::Duration::from_nanos(10));
+    command
+        .args(argus)
+        .stdout(Stdio::piped());
+
+    if let Ok(mut child) = command.spawn() {
+        if let Some(mut out) = child.stdout.take() {
+          let mut pre_line: Vec<u8> = vec![];
+            loop {            
+              let mut chars: [u8; 1] = [0; 1];
+              out.read(&mut chars).expect("reading journal buf didn't work");
+              
+              // check if we encounter a newline character, if yes send chars 
+              if chars[0] == b'\n' || chars[0] == b'\r' {
+                // terminate string
+                //println!("Newline detected");
+                //println!("{}", str::from_utf8(&pre_line).unwrap());
+                let line = String::from_utf8(pre_line).unwrap();
+                event_tx.send(Action::IONotify(line)).unwrap_or_else(|err| {
+                  println!("Send Error: {}", err);
+                });
+                pre_line = vec![];
+              }
+              else {
+                // add char to line
+                //print!("Pushing {}", str::from_utf8(&chars).unwrap());
+                pre_line.push(chars[0]);
+                //println!("{}", str::from_utf8(&pre_line).unwrap());
+              } 
+              let cancel = _cancellation_token.is_cancelled();
+              if cancel {
+                  let fetchmsg = format!(" ❌ STOPPED journalctl watcher process");
+                  event_tx.send(Action::InternalLog(fetchmsg)).expect("LOG: StopJCTLWatcher message failed to send");
+                  let _ = child.kill().unwrap();
+                  break;
+              }  
+              tick_interval.tick().await;   
+            }  
+        } else {
+
+        }
+    } else {
+      println!("Process failed to start");
+    }
+  });
+
+  Ok(())
+
+}

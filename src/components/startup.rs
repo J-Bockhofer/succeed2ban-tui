@@ -654,7 +654,7 @@ impl Component for Startup <'_> {
 
         let _ = message::insert_new_message(conn, Option::None, &timestamp, &y, &x.ip, &x.country, &x.region, &x.city, &x.isp, is_jctl, is_ban).unwrap();
 
-
+        
         //self.stored_geo.push(x.clone()); 
       },
       Action::SubmitQuery(x) => {

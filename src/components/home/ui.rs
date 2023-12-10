@@ -141,7 +141,7 @@ pub fn create_io_list<'a>(
               .title(block::Title::from(iolist_title).alignment(Alignment::Left))
               .title(block::Title::from(iolist_capacity_display).alignment(Alignment::Right))
             )
-            //.highlight_style(theme.highlight_item_style)
+            .highlight_style(Style::new().fg(theme.colors_app.text_color.color))
             .highlight_symbol(">> ");
   iolist
 }
