@@ -1,8 +1,9 @@
-# succeed2Ban-tui
+# succeed2ban-tui
 
 Made with [ratatui](https://github.com/ratatui-org/ratatui/) 
 
 ![VHS](Map.PNG)
+(The Map screen, shows the location of IPs from incoming log-in attempts)
 
 ## Short
 
@@ -18,6 +19,8 @@ Issues / Todos:
 4. Configuration of fail2ban log path and Hotkeys
 5. Refactor for testing
 6. Text wrapping
+
+Only works off the default fail2ban log path for now @ `/var/log/fail2ban.log`
 
 ## Usage
 

@@ -102,6 +102,56 @@ impl<'de> Deserialize<'de> for KeyBindings {
   }
 }
 
+pub fn find_first_key_for_value(map: &HashMap<Vec<KeyEvent>, Action>, value: Action) -> Option<KeyCode> {
+
+  let eventvec: Vec<&Vec<KeyEvent>> = map.iter()
+      .filter_map(|(keyvec, val)| if *val == value { 
+        Some(keyvec) 
+      } else { None })
+      .collect();
+  if eventvec.is_empty() {
+    None
+  } else {
+    let keys = eventvec[0];
+    if keys.is_empty() {
+      None
+    } else {
+      Some(keys[0].code)
+    }
+  }
+
+}
+
+
+pub fn find_first_key_simple(map: &HashMap<KeyEvent, Action>, value: Action) -> Vec<KeyCode> {
+  let eventvec: Vec<KeyCode> = map.iter()
+      .filter_map(|(keyvec, val)| if *val == value { 
+        Some(keyvec.code) 
+      } else { None })
+      .collect();
+      eventvec
+}
+pub fn get_first_key_simple(map: &HashMap<KeyEvent, Action>, value: Action) -> String {
+  let keycode = find_first_key_simple(map, value);
+  if !keycode.is_empty() {
+    key_event_to_string(&KeyEvent::new(keycode[0], KeyModifiers::empty()))
+  } else {
+    "".to_string()
+  }
+}
+
+
+pub fn get_first_key_by_action(map: &HashMap<Vec<KeyEvent>, Action>, value: Action) -> String {
+  let keycode = find_first_key_for_value(map, value);
+  if keycode.is_some() {
+    key_event_to_string(&KeyEvent::new(keycode.unwrap(), KeyModifiers::empty()))
+  } else {
+    "".to_string()
+  }
+}
+
+
+
 fn parse_key_event(raw: &str) -> Result<KeyEvent, String> {
   let raw_lower = raw.to_ascii_lowercase();
   let (remaining, modifiers) = extract_modifiers(&raw_lower);
@@ -443,11 +493,37 @@ mod tests {
   fn test_config() -> Result<()> {
     let c = Config::new()?;
     assert_eq!(
-      c.keybindings.get(&Mode::Home).unwrap().get(&parse_key_sequence("<q>").unwrap_or_default()).unwrap(),
-      &Action::Quit
+      c.keybindings.get(&Mode::Stats).unwrap().get(&parse_key_sequence("<z>").unwrap_or_default()).unwrap(),
+      &Action::Help
     );
     Ok(())
   }
+
+  #[test]
+  fn test_config_inv() -> Result<()> {
+    let c = Config::new()?;
+    let keymap = c.keybindings.get(&Mode::Stats).unwrap();
+    let vec = find_first_key_for_value(keymap, Action::Help);
+    assert_eq!(
+      vec, //"<z>"
+      Some(KeyCode::Char('z'))
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn test_action_to_key() -> Result<()> {
+    let c = Config::new()?;
+    let keymap = c.keybindings.get(&Mode::Stats).unwrap();
+    let stroing = get_first_key_by_action(keymap, Action::Help);
+    //let vec = find_first_key_for_value(keymap, Action::Help);
+    assert_eq!(
+      stroing, //"<z>"
+      "z".to_string()
+    );
+    Ok(())
+  }
+
 
   #[test]
   fn test_simple_keys() {

@@ -261,17 +261,33 @@ impl App {
               let (cancel_tx, cancel_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
               jctl_sender = Option::Some(cancel_tx);
 
+              self.jctl_cancellation_token.cancel();
+              tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // make sure we're wound down
+              let token = CancellationToken::new();
+
+              
+              let _f2b_cancellation_token = token.child_token();
+              self.jctl_cancellation_token = token;
+
               // start the fail2ban watcher
               let action_tx2 = action_tx.clone();
               let action_tx3 = action_tx.clone();
 
               let journalwatcher = tokio::spawn(async move  {
-                
+                let _resp = tasks::monitor_journalctl( action_tx2, cancel_rx);
+                tokio::select! {
+                  _ = _f2b_cancellation_token.cancelled() => {
+                    todo!("Got dropped, so all should be fine");
+                  },
+                  _ = _resp => {
+                    todo!("Journalctl Watcher ended before it was cancelled, should not happen")
+                  },
+                }
 
-                  // Notify interface CPU higher but no polling shit and more stuff handled thanks
-                  let _resp = tasks::monitor_journalctl( action_tx2, cancel_rx).await.unwrap_or_else(|err| {
+                  
+/*                   let _resp = tasks::monitor_journalctl( action_tx2, cancel_rx).await.unwrap_or_else(|err| {
                     action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
-                  });
+                  }); */
                 });
               self.jctl_handle = Option::Some(journalwatcher);
               let fetchmsg = format!(" ✔ STARTED journalctl watcher");
@@ -282,6 +298,7 @@ impl App {
             if let Some(jctl_sender) = jctl_sender.take()  {
               // should be more graceful
               let handle = self.jctl_handle.take().unwrap();
+              self.jctl_cancellation_token.cancel();
 
               jctl_sender.send(false).unwrap_or_else(|err| {
                 println!("Failed to send JCTL abort with Error: {}", err);
@@ -303,10 +320,10 @@ impl App {
                   break;
                 }
               }
-              let fetchmsg = format!(" ❌ STOPPED journalctl watcher");
-              action_tx.clone().send(Action::InternalLog(fetchmsg)).expect("LOG: StopJCTLWatcher message failed to send");
-
-
+              if self.jctl_cancellation_token.is_cancelled() {
+                let fetchmsg = format!(" ❌ STOPPED journalctl watcher");
+                action_tx.clone().send(Action::InternalLog(fetchmsg)).expect("LOG: StopJCTLWatcher message failed to send");
+              }
             }
 
           },

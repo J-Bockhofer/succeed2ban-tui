@@ -24,7 +24,7 @@ use tui_input::{backend::crossterm::EventHandler, Input};
 use chrono::{self, Datelike};
 
 use super::{Component, Frame};
-use crate::{action::Action, config::key_event_to_string, components::home::utils::centered_rect};
+use crate::{action::{Action, StatAction}, config::{Config, KeyBindings, get_first_key_simple, get_first_key_by_action}, components::home::utils::centered_rect};
 
 use crate::{migrations::schema::{city::City, region::Region, isp::ISP, country::Country, message::MiniMessage, ip::IP},
 themes::Theme, gen_structs::StatefulList, themes::Themes};
@@ -50,6 +50,7 @@ pub struct Stats {
   pub action_tx: Option<UnboundedSender<Action>>,
   pub keymap: HashMap<KeyEvent, Action>,
   pub last_events: Vec<KeyEvent>,
+  config: Config,
   // 
   pub mode: Mode,
   pub selection_mode: SelectionMode,
@@ -292,6 +293,12 @@ impl Component for Stats {
     Ok(())
   }
 
+  fn register_config_handler(&mut self, config: Config) -> Result<()> {
+    self.config = config;
+    Ok(())
+  }
+
+
   fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
     
     self.last_events.push(key.clone());
@@ -302,18 +309,6 @@ impl Component for Stats {
             Mode::Normal => {
               match key.code {
                 KeyCode::Esc => {return Ok(Some(Action::StatsHide));},
-                KeyCode::Char(keychar) => {
-                    match keychar {
-                        'E'|'e' => {return Ok(Some(Action::StatsHide));},
-                        'W'|'w' => {if self.display_mode == DisplayMode::Help {self.display_mode = DisplayMode::Normal;} else {self.display_mode = DisplayMode::Help;} return Ok(Some(Action::Blank))},
-                        'B'|'b' => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Block;}},
-                        'U'|'u' => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Unblock;}},
-                        'A'|'a' => {self.sort_mode = SortMode::Alphabetical; self.sort_by_selected_mode()?;},
-                        'S'|'s' => {self.sort_mode = SortMode::NumWarns; self.sort_by_selected_mode()?;},
-                        'D'|'d' => {self.sort_mode = SortMode::Blocked; self.sort_by_selected_mode()?;},
-                        _ => {self.input.handle_event(&crossterm::event::Event::Key(key));},
-                    }
-                }
                 _ => {
                   self.input.handle_event(&crossterm::event::Event::Key(key));
                 },
@@ -324,10 +319,6 @@ impl Component for Stats {
                 KeyCode::Esc => {return Ok(Some(Action::StatsHide));},
                 KeyCode::Char(keychar) => {
                     match keychar {
-                        'E'|'e' => {return Ok(Some(Action::StatsHide));},
-                        'W'|'w' => {if self.display_mode == DisplayMode::Help {self.display_mode = DisplayMode::Normal;} else {self.display_mode = DisplayMode::Help;} return Ok(Some(Action::Blank))},
-                        'B'|'b' => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Block;}},
-                        'U'|'u' => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Unblock;}},
                         'Y'|'y' => {self.block_by_selected_mode()?; self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal;},
                         'N'|'n' => {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal;},
                         _ => {self.input.handle_event(&crossterm::event::Event::Key(key));},
@@ -418,6 +409,7 @@ impl Component for Stats {
 
   fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
+            Action::Help => {if self.display_mode == DisplayMode::Help {self.display_mode = DisplayMode::Normal;} else {self.display_mode = DisplayMode::Help;} return Ok(Some(Action::Render))},
             Action::StatsShow => {self.showing_stats = true;},
             Action::StatsHide => {self.showing_stats = false;},
             Action::Tick => self.tick(),
@@ -433,6 +425,19 @@ impl Component for Stats {
               self.mode = Mode::Normal;
             },
             Action::StartupDone => {self.countries.next(); self.selected_country();},
+
+            Action::Stats(x) => {
+              match x {
+                StatAction::SortAlphabetical => {self.sort_mode = SortMode::Alphabetical; self.sort_by_selected_mode()?;},
+                StatAction::SortWarnings => {self.sort_mode = SortMode::NumWarns; self.sort_by_selected_mode()?;},
+                StatAction::SortBlocked => {self.sort_mode = SortMode::Blocked; self.sort_by_selected_mode()?;},
+
+                StatAction::ExitStats => {return Ok(Some(Action::StatsHide));}
+                StatAction::Block => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Block;}}
+                StatAction::Unblock => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Unblock;}}
+                _ => {}
+              }
+            }
 
             Action::StatsGetCountries => {self.countries.unselect(); self.countries = StatefulList::with_items(vec![]);},
             Action::StatsGetRegions => {self.regions.unselect(); self.regions = StatefulList::with_items(vec![]); self.full_regions = vec![];},
@@ -554,7 +559,7 @@ impl Component for Stats {
           DisplayMode::Help => {
             let p_area = centered_rect(f.size(), 35, 30);
             f.render_widget(Clear, p_area);
-            f.render_widget(ui::popup_help(&self.apptheme),p_area);
+            f.render_widget(ui::popup_help(&self.apptheme, self.config.clone()),p_area);
             },
           _ => {}
         }

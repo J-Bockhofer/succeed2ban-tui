@@ -22,6 +22,40 @@ pub enum InputAction { // take stuff from main Action enum?
 
 } 
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum StatAction { // take stuff from main Action enum?
+  ExitStats,
+  Block,
+  Unblock,
+  Refresh,
+  SortAlphabetical,
+  SortWarnings,
+  SortBlocked,
+} 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum HomeAction {
+  DrawAll,
+  DrawSticky,
+  DrawDecay,
+  Query,
+  EnterStats,
+  Logs,
+  Map,
+  Clear,
+  Ban,
+  Unban,
+
+  First,
+  Previous,
+  Next,
+  Last,
+  Unselect,
+  SetCapacity,
+
+  Follow,
+  Static,
+}
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Action {
@@ -34,6 +68,9 @@ pub enum Action {
   Refresh,
   Error(String),
   Help,
+
+  Stats(StatAction),
+  Home(HomeAction),
 
   EnterNormal,
   EnterTakeAction,
@@ -182,6 +219,38 @@ impl<'de> Deserialize<'de> for Action {
           "EnterNormal" => Ok(Action::EnterNormal),
           "EnterTakeAction" => Ok(Action::EnterTakeAction),
           "StartupDone" => Ok(Action::StartupDone),
+          // Home Actions //
+          // General
+          "Query" => Ok(Action::Home(HomeAction::Query)),
+          "DrawAll" =>  Ok(Action::Home(HomeAction::DrawAll)),
+          "DrawSticky" =>  Ok(Action::Home(HomeAction::DrawSticky)),
+          "DrawDecay" =>  Ok(Action::Home(HomeAction::DrawDecay)),
+          "Stats" => Ok(Action::Home(HomeAction::EnterStats)),
+          "Logs" => Ok(Action::Home(HomeAction::Logs)),
+          "Map" => Ok(Action::Home(HomeAction::Map)),
+          "Clear" => Ok(Action::Home(HomeAction::Clear)),
+          "Ban" => Ok(Action::Home(HomeAction::Ban)),
+          "Unban" => Ok(Action::Home(HomeAction::Unban)),
+          "First" => Ok(Action::Home(HomeAction::First)),
+          "Previous" => Ok(Action::Home(HomeAction::Previous)),
+          "Next" => Ok(Action::Home(HomeAction::Next)),
+          "Last" => Ok(Action::Home(HomeAction::Last)),
+          "Unselect" => Ok(Action::Home(HomeAction::Unselect)),
+          "SetCapacity" => Ok(Action::Home(HomeAction::SetCapacity)),
+          "Follow" => Ok(Action::Home(HomeAction::Follow)),
+          "Static" => Ok(Action::Home(HomeAction::Static)),
+
+          // Stat Actions //
+          // General
+          "Home" => Ok(Action::Stats(StatAction::ExitStats)),
+          "Block" => Ok(Action::Stats(StatAction::Block)),
+          "Unblock" => Ok(Action::Stats(StatAction::Unblock)),          
+
+          // Sorting
+          "SortAlphabetical" => Ok(Action::Stats(StatAction::SortAlphabetical)),
+          "SortWarnings" => Ok(Action::Stats(StatAction::SortWarnings)),
+          "SortBlocked" => Ok(Action::Stats(StatAction::SortBlocked)),
+          
           // Error
           data if data.starts_with("Error(") => {
             let error_msg = data.trim_start_matches("Error(").trim_end_matches(")");

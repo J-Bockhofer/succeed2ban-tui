@@ -25,8 +25,8 @@ use rand::distributions::Distribution;
 
 use super::{Component, Frame};
 use crate::{
-  action::Action,
-  config::{Config, KeyBindings},
+  action::{Action, HomeAction},
+  config::{Config, KeyBindings, get_first_key_by_action},
   geofetcher, gen_structs::StatefulList,
   themes, animations, migrations::schema,
   migrations::schema::ip::IP,
@@ -354,10 +354,11 @@ impl<'a> Home<'a> {
     querytext.push(queryerror);
 
     let querybox = Paragraph::new(querytext)
-    .set_style(Style::default())
+    .set_style(Style::new().fg(self.apptheme.colors_app.text_color.color))
     .block(Block::default()
     .bg(self.apptheme.colors_app.background_darkest.color)
     .borders(Borders::ALL)
+    .border_style(self.apptheme.styles_app.border_style)
     .title("Ban"));
     querybox
 
@@ -389,10 +390,11 @@ impl<'a> Home<'a> {
     querytext.push(queryerror);
 
     let querybox = Paragraph::new(querytext)
-    .set_style(Style::default())
+    .set_style(Style::new().fg(self.apptheme.colors_app.text_color.color))
     .block(Block::default()
     .bg(self.apptheme.colors_app.background_darkest.color)
     .borders(Borders::ALL)
+    .border_style(self.apptheme.styles_app.border_style)
     .title("Unban"));
     querybox
 
@@ -515,30 +517,30 @@ impl Component for Home<'_> {
         KeyCode::Char(keychar) => {
           match keychar {
             // General Hotkeys
-            'W'|'w' => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} return Ok(Some(Action::Blank))},
-            'Q'|'q' => {if self.displaymode == DisplayMode::Query {return Ok(Some(Action::ExitQuery))} else {return Ok(Some(Action::EnterQuery))} },
-            'E'|'e' => {return Ok(Some(Action::StatsShow))},
-            'C'|'c' => {return Ok(Some(Action::ConfirmClearLists)) },
-            'B'|'b' => {if self.displaymode == DisplayMode::Ban {self.ipstring = String::from(""); return Ok(Some(Action::ExitBan))} else {self.ipstring = self.selected_ip.clone(); return Ok(Some(Action::EnterBan))}},
-            'U'|'u' => {if self.displaymode == DisplayMode::Unban {self.ipstring = String::from(""); return Ok(Some(Action::ExitUnban))} else {self.ipstring = self.selected_ip.clone(); return Ok(Some(Action::EnterUnban))}},
-            'M'|'m' => {if self.displaymode == DisplayMode::Map {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Map;} return Ok(Some(Action::Blank))},
-            'T'|'t' => {if self.displaymode == DisplayMode::Logs {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Logs;} return Ok(Some(Action::Blank))},
+            //'W'|'w' => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} return Ok(Some(Action::Blank))},
+            //'Q'|'q' => {if self.displaymode == DisplayMode::Query {return Ok(Some(Action::ExitQuery))} else {return Ok(Some(Action::EnterQuery))} },
+            //'E'|'e' => {return Ok(Some(Action::StatsShow))},
+            //'C'|'c' => {return Ok(Some(Action::ConfirmClearLists)) },
+            //'B'|'b' => {if self.displaymode == DisplayMode::Ban {self.ipstring = String::from(""); return Ok(Some(Action::ExitBan))} else {self.ipstring = self.selected_ip.clone(); return Ok(Some(Action::EnterBan))}},
+            //'U'|'u' => {if self.displaymode == DisplayMode::Unban {self.ipstring = String::from(""); return Ok(Some(Action::ExitUnban))} else {self.ipstring = self.selected_ip.clone(); return Ok(Some(Action::EnterUnban))}},
+            //'M'|'m' => {if self.displaymode == DisplayMode::Map {self.displaymode = DisplayMode::Normal; return Ok(Some(Action::EnterNormal))} else {self.displaymode = DisplayMode::Map;} return Ok(Some(Action::EnterNormal))},
+            //'T'|'t' => {if self.displaymode == DisplayMode::Logs {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Logs;} return Ok(Some(Action::Blank))},
             // DrawMode switching
-            'A'|'a' => {self.drawmode = DrawMode::All; return Ok(Some(Action::Blank))},
-            'S'|'s' => {self.drawmode = DrawMode::Sticky; return Ok(Some(Action::Blank))},
-            'D'|'d' => {self.drawmode = DrawMode::Decaying; return Ok(Some(Action::Blank))},
+            //'A'|'a' => {self.drawmode = DrawMode::All; return Ok(Some(Action::Blank))},
+            //'S'|'s' => {self.drawmode = DrawMode::Sticky; return Ok(Some(Action::Blank))},
+            //'D'|'d' => {self.drawmode = DrawMode::Decaying; return Ok(Some(Action::Blank))},
             // IO-ListNavigation
-            'J'|'j' => {self.last_mode = self.mode; return Ok(Some(Action::LogsPrevious))}, // up // LogsSchedulePrevious Schedule locks me out with resetting modes
-            'H'|'h' => {self.last_mode = self.mode; return Ok(Some(Action::LogsFirst))}, // top
-            'K'|'k' => {self.last_mode = self.mode; return Ok(Some(Action::LogsNext))},  // down
-            'L'|'l' => {self.last_mode = self.mode; return Ok(Some(Action::LogsLast))}, // bottom
-            'P'|'p' => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))}, // unselect
-            '+'|'-' => { return Ok(Some(Action::SetCapacity))}, // unselect
+            //'J'|'j' => {self.last_mode = self.mode; return Ok(Some(Action::LogsPrevious))}, // up // LogsSchedulePrevious Schedule locks me out with resetting modes
+            //'H'|'h' => {self.last_mode = self.mode; return Ok(Some(Action::LogsFirst))}, // top
+            //'K'|'k' => {self.last_mode = self.mode; return Ok(Some(Action::LogsNext))},  // down
+            //'L'|'l' => {self.last_mode = self.mode; return Ok(Some(Action::LogsLast))}, // bottom
+            //'P'|'p' => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))}, // unselect
+            //'+'|'-' => { return Ok(Some(Action::SetCapacity))}, // unselect
             // IP & Action Navigation
             // -- ArrowKeys
             // IOMode switching
-            'F'|'f' => {self.iomode = IOMode::Follow; return Ok(Some(Action::Blank))},
-            'G'|'g' => {self.iomode = IOMode::Static; return Ok(Some(Action::Blank))},
+            //'F'|'f' => {self.iomode = IOMode::Follow; return Ok(Some(Action::Blank))},
+            //'G'|'g' => {self.iomode = IOMode::Static; return Ok(Some(Action::Blank))},
             _ => {}
           }
         },
@@ -759,6 +761,7 @@ impl Component for Home<'_> {
   fn update(&mut self, action: Action) -> Result<Option<Action>> {
 
     match action {
+      Action::Help => {if self.displaymode == DisplayMode::Help {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Help;} return Ok(Some(Action::Render))},
       Action::Tick => {},
       Action::StartupDone => {self.startup_complete = true; self.command_tx.clone().unwrap().send(Action::Refresh)?;}
       Action::EnterNormal => {self.mode = Mode::Normal; self.last_mode = self.mode;},
@@ -781,6 +784,34 @@ impl Component for Home<'_> {
         let tx = self.command_tx.clone().unwrap();
         tx.send(Action::InternalLog(format!(" ✓ Got home: {}, {}", x.city, x.country)))?;
         
+      }
+      Action::Home(x) => {
+        match x {
+          HomeAction::Query => {if self.displaymode == DisplayMode::Query {return Ok(Some(Action::ExitQuery))} else {return Ok(Some(Action::EnterQuery))}},
+          HomeAction::EnterStats => {return Ok(Some(Action::StatsShow))},
+          HomeAction::Logs => {if self.displaymode == DisplayMode::Logs {self.displaymode = DisplayMode::Normal;} else {self.displaymode = DisplayMode::Logs;} return Ok(Some(Action::Blank))},
+          HomeAction::Map => {if self.displaymode == DisplayMode::Map {self.displaymode = DisplayMode::Normal; return Ok(Some(Action::EnterNormal))} else {self.displaymode = DisplayMode::Map;} return Ok(Some(Action::EnterNormal))},
+          HomeAction::Clear => {return Ok(Some(Action::ConfirmClearLists))},
+          HomeAction::Ban => {if self.displaymode == DisplayMode::Ban {self.ipstring = String::from(""); return Ok(Some(Action::ExitBan))} else {self.ipstring = self.selected_ip.clone(); return Ok(Some(Action::EnterBan))}},
+          HomeAction::Unban => {if self.displaymode == DisplayMode::Unban {self.ipstring = String::from(""); return Ok(Some(Action::ExitUnban))} else {self.ipstring = self.selected_ip.clone(); return Ok(Some(Action::EnterUnban))}},
+          // IO Mode
+          HomeAction::Follow => {self.iomode = IOMode::Follow; return Ok(Some(Action::Blank))},
+          HomeAction::Static => {self.iomode = IOMode::Static; return Ok(Some(Action::Blank))},
+
+          // IO Stream
+          HomeAction::First => {return Ok(Some(Action::LogsFirst))},
+          HomeAction::Previous => {return Ok(Some(Action::LogsPrevious))},
+          HomeAction::Next => {return Ok(Some(Action::LogsNext))},
+          HomeAction::Last => {return Ok(Some(Action::LogsLast))},
+          HomeAction::Unselect => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))},
+          HomeAction::SetCapacity => { return Ok(Some(Action::SetCapacity))},
+
+          HomeAction::DrawAll => {self.drawmode = DrawMode::All},
+          HomeAction::DrawSticky => {self.drawmode = DrawMode::Sticky},
+          HomeAction::DrawDecay => {self.drawmode = DrawMode::Decaying},
+          
+          //_ => {}
+        }
       }
 
       //General
@@ -1023,7 +1054,7 @@ impl Component for Home<'_> {
     } else {
       if self.startup_complete && !self.showing_stats && self.displaymode == DisplayMode::Map {
         // Draw only Map
-        self.mode = Mode::Normal; // Prevents executing actions silently on map screen
+        self.mode = Mode::Normal; // Prevents executing actions silently on map screen, too crude .. Action::EnterNormal on map
         // Make new layout
         for item in &mut self.iplist.items  {
           item.pointdata.decay_point(self.apptheme.decay_time);
@@ -1121,7 +1152,7 @@ impl Component for Home<'_> {
     
       }
 
-      if !self.showing_stats  && self.displaymode != DisplayMode::Map { // Something should definitly be on screen
+      if !self.showing_stats  && self.displaymode != DisplayMode::Map { // Something should definitely be on screen
         f.render_widget(Paragraph::new("You shouldn't see this, if you keep encountering this problem please create an issue referring to Code: E100"), area);
       }
     }

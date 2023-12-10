@@ -45,7 +45,6 @@ textwrap = "0.16.0"
 rand = "0.8.5"
 chrono = "0.4.31"
 serial_test = "2.0.0"
-local-ip-address = "0.5.6"
 
 [profile.release]
 debug = true

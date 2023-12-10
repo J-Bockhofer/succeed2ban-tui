@@ -1,10 +1,11 @@
-use super::{SelectionMode, SortState, Stats};
+use super::{SelectionMode, SortState, Stats, Action, StatAction, KeyBindings, KeyEvent, Config, get_first_key_simple, get_first_key_by_action};
 use crate::migrations::schema::{city::City, country::Country, ip::IP, isp::ISP, message::MiniMessage, region::Region};
-use crate::{gen_structs::StatefulList, themes::Theme};
+use crate::{gen_structs::StatefulList, themes::Theme, mode::Mode as AppMode};
 use chrono::{DateTime, Datelike, FixedOffset};
 use color_eyre::owo_colors::OwoColorize;
 use ratatui::widgets::block::Title;
 use ratatui::{prelude::*, widgets::*};
+use std::collections::HashMap;
 
 // Rendered Lists     // ---------------------------------------------------------------- //
 
@@ -513,8 +514,23 @@ pub fn make_ip_overview(theme: &Theme, sel_ip: IP) -> impl Widget + '_ {
 
 // POPUPS // ---------------------------------------------------------------- //
 
-pub fn popup_help(theme: &Theme) -> impl Widget + '_ {
+pub fn popup_help(theme: &Theme, config: Config) -> impl Widget + '_ {
   // make a layout in center of the screen, outside this function, pass area to this
+  //keymap.get(k) , keymap: HashMap<KeyEvent, Action>
+  let keymap = config.keybindings.0.get(&AppMode::Stats).unwrap();
+  let helpkey = get_first_key_by_action(keymap, Action::Help);
+  //let helpkey = get_first_key_simple(&keymap, Action::Help);
+  // General
+  let key_exit = get_first_key_by_action(keymap, Action::Stats(StatAction::ExitStats));
+  let key_block = get_first_key_by_action(keymap, Action::Stats(StatAction::Block));
+  let key_unblock = get_first_key_by_action(keymap, Action::Stats(StatAction::Unblock));
+
+  // Sort
+  let key_sort_alph = get_first_key_by_action(keymap, Action::Stats(StatAction::SortAlphabetical));
+  let key_sort_warn = get_first_key_by_action(keymap, Action::Stats(StatAction::SortWarnings));
+  let key_sort_block = get_first_key_by_action(keymap, Action::Stats(StatAction::SortBlocked));
+
+
   let headerstyle = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_text_bright.color);
   let linestyle = Style::default().fg(theme.colors_app.text_color.color);
   let linestyle_alt: Style;
@@ -533,19 +549,19 @@ pub fn popup_help(theme: &Theme) -> impl Widget + '_ {
   helptext.push(Line::from(Span::styled(format!("Arrowkeys:    Select        Select item in List"), linestyle)));
   helptext.push(Line::from(Span::styled(format!("BackTab:      Switch        Switch selected List up"), linestyle_alt)));
   helptext.push(Line::from(Span::styled(format!("Tab:          Switch        Switch selected List down"), linestyle)));
-  helptext.push(Line::from(Span::styled(format!("W|w:          Help          Toggle help"), linestyle_alt)));
-  helptext.push(Line::from(Span::styled(format!("R|r:          Refresh       Gets up-to-data for List from db"), linestyle)));
+  helptext.push(Line::from(Span::styled(format!(" {} :          Help          Toggle help", helpkey), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!(" r :          Refresh       Gets up-to-data for List from db"), linestyle)));
   helptext.push(Line::from(Span::styled(format!("                            (Country auto-fetches all)"), linestyle)));
-  helptext.push(Line::from(Span::styled(format!("E|e:          Back          Return to main screen"), linestyle_alt)));
-  helptext.push(Line::from(Span::styled(format!("B|b:          Block         Blocks all IPs for selected"), linestyle)));
-  helptext.push(Line::from(Span::styled(format!("U|u:          Unblock       Lifts the Block for selected"), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!(" {} :          Back          Return to main screen", key_exit), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!(" {} :          Block         Blocks all IPs for selected", key_block), linestyle)));
+  helptext.push(Line::from(Span::styled(format!(" {} :          Unblock       Lifts the Block for selected", key_unblock), linestyle_alt)));
   let mut hheader = Line::from(format!("---           Sorting      ---                                                                 -"
   ));
   hheader.patch_style(headerstyle);
   helptext.push(hheader);  
-  helptext.push(Line::from(Span::styled(format!("A|a:          ABC           Sorts selected List by Alpha-Numeric"), linestyle)));
-  helptext.push(Line::from(Span::styled(format!("S|s:          Warn          Sorts selected List by number of warnings"), linestyle_alt)));
-  helptext.push(Line::from(Span::styled(format!("D|d:          Block         Sorts selected List by blocked / unblocked"), linestyle)));
+  helptext.push(Line::from(Span::styled(format!(" {} :          ABC           Sorts selected List by Alpha-Numeric", key_sort_alph), linestyle)));
+  helptext.push(Line::from(Span::styled(format!(" {} :          Warn          Sorts selected List by number of warnings", key_sort_warn), linestyle_alt)));
+  helptext.push(Line::from(Span::styled(format!(" {} :          Block         Sorts selected List by blocked / unblocked", key_sort_block), linestyle)));
 
   let infoblock = Paragraph::new(helptext)
   .set_style(Style::default())
@@ -710,7 +726,7 @@ pub fn create_barchart<'a>(theme: &Theme, bars: Vec<Bar<'a>>, titlestr: &'a str)
   .group_gap(3)
   .bar_style(Style::new().bg(theme.colors_app.background_brightest.color))
   .value_style(Style::new().fg(theme.colors_app.text_color.color).bold())
-  .label_style(Style::new().white())
+  .label_style(Style::new().fg(theme.colors_app.text_color.color))
   //.data(&bars)
   .data(BarGroup::default().bars(&bars))
   .max(100);

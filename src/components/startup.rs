@@ -1,3 +1,4 @@
+use std::process::Output;
 /// Startup Component
 /// Acquires db connection
 /// Sets up initial db
@@ -25,7 +26,7 @@ use crate::themes::ThemeContainer;
 use crate::{action::Action, config::key_event_to_string, themes, animations::Animation, migrations::schema, geofetcher};
 use crate::migrations::schema::{message, isp, city, region, country, ip};
 
-use local_ip_address::local_ip; // maybe use this https://crates.io/crates/get_if_addrs, no curl https://ident.me/
+
 
 use rand::prelude::*;
 
@@ -76,7 +77,7 @@ pub struct Startup <'a>{
   // db connection,
   dbconn: Option<Connection>,
 
-  
+
   log_messages: Vec<String>,
 
 
@@ -132,6 +133,15 @@ impl <'a> Startup <'a> {
     aß6,algâds&/)0,y(-mâk&d2lhcß(-(m
     -#4.f,f&))â07c-9,l)c&#4g,/c%)â%h
     lf0ß4dl09f7/mms#.d2hmf44gf-c-10m"]);
+    self.startup_lines =  vec![
+      "Eating logfiles",
+     "Setting up stderr",
+      "Deciphering binaries",
+       "Attempting to retaliate",
+        "Starting the engines", 
+        "Processing db",
+         "Calling home",
+          "Tracing routes",];
     self.countdown_to_start = 10;
     self.fetching_ips = vec![];
     self.available_themes.items = themes::Themes::default().theme_collection;
@@ -174,7 +184,14 @@ impl <'a> Startup <'a> {
       tx.send(Action::StatsGetISPs).expect("Failed to get ISPs on Startup");  
       tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;    
     });
-    self.log_messages.push(format!("{}            Deciphering binaries", dt.to_string()));
+    let rndline = self.get_rnd_start_msg(self.startup_lines.clone());
+    self.log_messages.push(format!("{}            {}", dt.to_string(), rndline));
+  }
+
+  pub fn get_rnd_start_msg(&self, lines: Vec<&str>) -> String {
+    let mut rng = rand::thread_rng();
+    let line: usize = rng.gen_range(0..lines.len());
+    lines[line].to_string()
   }
 
   pub fn set_rng_points(mut self) -> Self {
@@ -197,6 +214,33 @@ impl <'a> Startup <'a> {
     self.keymap = keymap;
     self
   }
+
+  pub fn f2b_check_banned(&self, cip: &str) -> bool {
+    let output = std::process::Command::new("fail2ban-client")
+      .arg("status")
+      .arg("sshd")
+      // Tell the OS to record the command's output
+      .stdout(std::process::Stdio::piped())
+      // execute the command, wait for it to complete, then capture the output
+      .output();
+      // Blow up if the OS was unable to start the program // No pls dont
+    let stdout: String;
+    if output.is_ok() {
+      stdout = String::from_utf8(output.unwrap().stdout).unwrap();
+    }  else {
+      let fetchmsg = format!("   Failed to run fail2ban client for IP look-up");
+      self.action_tx.clone().unwrap().send(Action::InternalLog(fetchmsg)).expect("LOG: Fail to run message failed to send, yes... really... EpicFail");
+      stdout = String::from("");
+    }  
+    // extract the raw bytes that we captured and interpret them as a string        
+    if stdout.contains(cip) {
+      true
+    }
+    else {
+      false
+    }
+  }
+
 
   pub fn set_theme(&mut self) {
     let theme_idx = self.available_themes.state.selected();
@@ -263,20 +307,6 @@ impl <'a> Startup <'a> {
 impl Component for Startup <'_> {
 
   fn init(&mut self, area: Rect) -> Result<()> {
-
-      self.startup_lines =  vec![
-        "Swallowing logfiles",
-       "Setting up stderr",
-        "Mar",
-         "Apr",
-          "May", 
-          "Jun",
-           "Jul",
-            "Aug",
-             "Sep",
-              "Oct",
-               "Nov",
-                "Dec"];
       
       self.action_tx.clone().unwrap().send(Action::StartupConnect).expect("Action::StartupConnect failed to send!");
       
@@ -313,6 +343,7 @@ impl Component for Startup <'_> {
   fn update(&mut self, action: Action) -> Result<Option<Action>> {
     let tx = self.action_tx.clone().unwrap();
     match action {
+      
       Action::Tick => {self.tick()},
       Action::Render => self.render_tick(),
       Action::StartupDone => {self.mode = Mode::Completed;
@@ -408,13 +439,17 @@ impl Component for Startup <'_> {
               // Tell the OS to record the command's output
               .stdout(std::process::Stdio::piped())
               // execute the command, wait for it to complete, then capture the output
-              .output()
-              // Blow up if the OS was unable to start the program
-              .unwrap();
-    
-            // extract the raw bytes that we captured and interpret them as a string
-            let stdout = String::from_utf8(output.stdout).unwrap();
-            
+              .output();
+              // Blow up if the OS was unable to start the program // No pls dont
+            let stdout: String;
+            if output.is_ok() {
+              stdout = String::from_utf8(output.unwrap().stdout).unwrap();
+            }  else {
+              let fetchmsg = format!("   Failed to run fail2ban client for IP look-up");
+              self.action_tx.clone().unwrap().send(Action::InternalLog(fetchmsg)).expect("LOG: Fail to run message failed to send, yes... really... EpicFail");
+              stdout = String::from("");
+            }  
+            // extract the raw bytes that we captured and interpret them as a string        
             if stdout.contains(cip) {
               is_banned = true;
             }
@@ -582,24 +617,27 @@ impl Component for Startup <'_> {
         let fetchmsg = format!(" {} Got location for IP {} ", symb, ip.ip);
         tx.send(Action::InternalLog(fetchmsg)).expect("Fetchlog message failed to send");
 
-        if country.is_blocked || city.is_blocked || isp.is_blocked || region.is_blocked {         
-          tx.send(Action::BanIP(x.clone())).expect("Block failed to send");
-          let timestamp = chrono::offset::Local::now().to_rfc3339();
-          let mut reasons: Vec<String> = vec![];
-          if country.is_blocked {reasons.push(format!("Country: {}", country.name));}
-          if region.is_blocked {reasons.push(format!("Region: {}", region.name));}
-          if city.is_blocked {reasons.push(format!("City: {}", city.name));}
-          if isp.is_blocked {reasons.push(format!("ISP: {}", isp.name));}
-
-          //let blockmsg = format!("{}    [succeed2ban.filter]      Blocked IP {} - Filter [ {} ] ", timestamp, ip.ip, reasons.join(" "));
-          //tx.send(Action::IONotify(blockmsg)).expect("Blocklog message failed to send");
-
-          let blockmsg = format!(" {} Blocked IP {} :", self.apptheme.symbol_block, ip.ip);
-          tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
-          for reason in reasons {
-            let blockmsg = format!(" {} Blocked {} ",self.apptheme.symbol_block , reason);
+        if country.is_blocked || city.is_blocked || isp.is_blocked || region.is_blocked { 
+          if !ip.is_banned && !is_ban {
+            tx.send(Action::BanIP(x.clone())).expect("Block failed to send");
+            let timestamp = chrono::offset::Local::now().to_rfc3339();
+            let mut reasons: Vec<String> = vec![];
+            if country.is_blocked {reasons.push(format!("Country: {}", country.name));}
+            if region.is_blocked {reasons.push(format!("Region: {}", region.name));}
+            if city.is_blocked {reasons.push(format!("City: {}", city.name));}
+            if isp.is_blocked {reasons.push(format!("ISP: {}", isp.name));}
+  
+            //let blockmsg = format!("{}    [succeed2ban.filter]      Blocked IP {} - Filter [ {} ] ", timestamp, ip.ip, reasons.join(" "));
+            //tx.send(Action::IONotify(blockmsg)).expect("Blocklog message failed to send");
+  
+            let blockmsg = format!(" {} Blocked IP {} :", self.apptheme.symbol_block, ip.ip);
             tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
-          }
+            for reason in reasons {
+              let blockmsg = format!(" {} Blocked {} ",self.apptheme.symbol_block , reason);
+              tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
+            }
+          }        
+
         }
 
         let timestamp = chrono::offset::Local::now().to_rfc3339();
@@ -773,34 +811,42 @@ impl Component for Startup <'_> {
       },
 
       Action::BanIP(x) => {
+
         if !x.is_banned {
-          let tx = self.action_tx.clone().unwrap();
-          let symb = self.apptheme.symbol_ban.clone();
-          tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-            // check if is banned
-            let output = std::process::Command::new("fail2ban-client")
-              .arg("set")
-              .arg("sshd")
-              .arg("banip")
-              .arg(&x.ip)
-              // Tell the OS to record the command's output
-              .stdout(std::process::Stdio::piped())
-              // execute the command, wait for it to complete, then capture the output
-              .output()
-              // Blow up if the OS was unable to start the program
-              .unwrap();
-    
-            // extract the raw bytes that we captured and interpret them as a string
-            let stdout = String::from_utf8(output.stdout).unwrap();
-            if stdout.contains("0") {
-              tx.send(Action::Banned(true)).expect("Failed to Ban ...");
-              let fetchmsg = format!(" {} Banned IP: {}", symb, &x.ip);
-              tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Ban IP message failed to send");
-            } else {
-              tx.send(Action::Banned(false)).expect("Failed to Ban ...");
-            }
-          });
+
+          let besure = self.f2b_check_banned(&x.ip);
+          if !besure {
+            let tx = self.action_tx.clone().unwrap();
+            let symb = self.apptheme.symbol_ban.clone();
+            tokio::spawn(async move {
+              tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+              // check if is banned
+              let output = std::process::Command::new("fail2ban-client")
+                .arg("set")
+                .arg("sshd")
+                .arg("banip")
+                .arg(&x.ip)
+                // Tell the OS to record the command's output
+                .stdout(std::process::Stdio::piped())
+                // execute the command, wait for it to complete, then capture the output
+                .output()
+                // Blow up if the OS was unable to start the program
+                .unwrap();
+      
+              // extract the raw bytes that we captured and interpret them as a string
+              let stdout = String::from_utf8(output.stdout).unwrap();
+              if stdout.contains("0") {
+                tx.send(Action::Banned(true)).expect("Failed to Ban ...");
+                let fetchmsg = format!(" {} Banned IP: {}", symb, &x.ip);
+                tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Ban IP message failed to send");
+              } else {
+                tx.send(Action::Banned(false)).expect("Failed to Ban ...");
+              }
+            });
+          } else {
+            tx.send(Action::Banned(true)).expect("Failed to Ban ...");
+          }
+          tx.send(Action::Banned(true)).expect("Failed to Ban ...");
         }
       },
       Action::UnbanIP(x) => {

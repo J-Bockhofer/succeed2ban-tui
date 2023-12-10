@@ -4,6 +4,50 @@
       "<Ctrl-d>": "Quit", // Another way to quit
       "<Ctrl-c>": "Quit", // Yet another way to quit
       "<Ctrl-z>": "Suspend", // Suspend the application
+      // General
+      "<w>": "Help", // A way to help in Main Screen
+      "<q>": "Query", // Query IP from Database
+      "<e>": "Stats", // To Stat Screen 
+      "<t>": "Logs", // Maximize Logs 
+      "<m>": "Map", // Maximize Map 
+      "<c>": "Clear", // Clear current lists
+      "<b>": "Ban", // Ban IP
+      "<u>": "Unban", // Unban IP
+
+      // Follow Mode
+      "<f>": "Follow",
+      "<g>": "Static",      
+
+      // Draw Mode
+      "<a>": "DrawAll",
+      "<s>": "DrawSticky",
+      "<d>": "DrawDecay",
+
+      // IO Stream
+      "<h>": "First",
+      "<j>": "Previous",
+      "<k>": "Next",
+      "<l>": "Last",
+      "<p>": "Unselect",
+      "<+>": "SetCapacity",
+      "<->": "SetCapacity",   
+      
     },
+    "Stats":{
+      "<w>": "Help", // A way to help in Main Screen
+      "<Ctrl-d>": "Quit", // Another way to quit
+      "<Ctrl-c>": "Quit", // Yet another way to quit
+      "<Ctrl-z>": "Suspend", // Suspend the application
+      // General
+      "<w>": "Help", // A way to help in Stat Screen
+      "<b>": "Block",
+      "<u>": "Unblock",
+      "<e>": "Home", // Back to Main Screen    
+
+      // Sort Mode
+      "<a>": "SortAlphabetical",
+      "<s>": "SortWarnings",
+      "<d>": "SortBlocked",
+    }
   }
 }

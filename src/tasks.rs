@@ -167,3 +167,6 @@ pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, mut cancel_rx:
     }
 
 }
+
+
+
