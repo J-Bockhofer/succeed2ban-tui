@@ -493,7 +493,7 @@ mod tests {
   fn test_config() -> Result<()> {
     let c = Config::new()?;
     assert_eq!(
-      c.keybindings.get(&Mode::Stats).unwrap().get(&parse_key_sequence("<z>").unwrap_or_default()).unwrap(),
+      c.keybindings.get(&Mode::Stats).unwrap().get(&parse_key_sequence("<w>").unwrap_or_default()).unwrap(),
       &Action::Help
     );
     Ok(())
@@ -506,7 +506,7 @@ mod tests {
     let vec = find_first_key_for_value(keymap, Action::Help);
     assert_eq!(
       vec, //"<z>"
-      Some(KeyCode::Char('z'))
+      Some(KeyCode::Char('w'))
     );
     Ok(())
   }
@@ -519,7 +519,7 @@ mod tests {
     //let vec = find_first_key_for_value(keymap, Action::Help);
     assert_eq!(
       stroing, //"<z>"
-      "z".to_string()
+      "w".to_string()
     );
     Ok(())
   }

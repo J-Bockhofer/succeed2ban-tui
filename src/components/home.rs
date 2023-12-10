@@ -336,11 +336,12 @@ impl<'a> Home<'a> {
     let querycursor = self.anim_querycursor.keyframes[querycursor];
     let selected_ip: String;
     let sel_idx = self.iplist.state.selected();
-    if !self.iplist.items.is_empty() && self.ipstring.is_empty() {
+    if !self.iplist.items.is_empty() && self.ipstring.is_empty() && self.iomode == IOMode::Follow {
       let sel_idx = sel_idx.unwrap();
       selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
       self.ipstring = selected_ip;
     }
+
 
     let mut querytext: Vec<Line> = vec![];
     let queryline =   Line::from(vec![
@@ -370,7 +371,7 @@ impl<'a> Home<'a> {
     let querycursor = self.anim_querycursor.keyframes[querycursor];
     let selected_ip: String;
     let sel_idx = self.iplist.state.selected();
-    if !self.iplist.items.is_empty() && self.ipstring.is_empty() {
+    if !self.iplist.items.is_empty() && self.ipstring.is_empty()  && self.iomode == IOMode::Follow {
       let sel_idx = sel_idx.unwrap();
       selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
       self.ipstring = selected_ip;
@@ -421,7 +422,7 @@ impl<'a> Home<'a> {
           println!("Error submitting query from Home {}", err);
         });
       }
-      self.ipstring = String::from("");
+      
       return true;
     }
     false
@@ -884,11 +885,12 @@ impl Component for Home<'_> {
             _ip.ip = self.ipstring.clone();
             self.command_tx.clone().unwrap().send(Action::BanIP(_ip))?;
           }
-
-          
         } else {
-          //todo!()
+          let mut _ip = IP::default();
+          _ip.ip = self.ipstring.clone();
+          self.command_tx.clone().unwrap().send(Action::BanIP(_ip))?;
         }
+
       },
       Action::RequestUnban => {
         let sel_ip = self.iplist.state.selected();
@@ -904,15 +906,20 @@ impl Component for Home<'_> {
           }
           
         } else {
-          //todo!()
+          let mut _ip = IP::default();
+          _ip.ip = self.ipstring.clone();
+          self.command_tx.clone().unwrap().send(Action::UnbanIP(_ip))?;          
+
         }
       },
       Action::Banned(x) => {
         if x {self.infotext = String::from("BANNED");
           list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitBan);
         }
+        self.ipstring = String::from("");
       },
       Action::Unbanned(x) => {
+        self.ipstring = String::from("");
         if x {self.infotext = String::from("BANNED");}
           list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitUnban);
       },

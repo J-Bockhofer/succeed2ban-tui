@@ -479,33 +479,40 @@ impl Component for Startup <'_> {
               let geodat = geofetcher::fetch_geolocation(req_ip.as_str()).await.unwrap_or(serde_json::Value::default());
 
               let geoip = String::from(geodat.get("query").unwrap().as_str().unwrap());
-              let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string(); // CRASH ON PI
-              let geolon = geodat.get("lon").unwrap().as_number().unwrap().to_string();
-              let geoisp = String::from(geodat.get("isp").unwrap().as_str().unwrap());
+              
+              let _tester = geodat.get("lat");
+              if _tester.is_some() {
+                let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string(); // CRASH ON PI
+                let geolon = geodat.get("lon").unwrap().as_number().unwrap().to_string();
+                let geoisp = String::from(geodat.get("isp").unwrap().as_str().unwrap());
+    
+                let geocountry = String::from(geodat.get("country").unwrap().as_str().unwrap());
+                let geocity = String::from(geodat.get("city").unwrap().as_str().unwrap());
+                let geocountrycode = String::from(geodat.get("countryCode").unwrap().as_str().unwrap());
+                let georegionname = String::from(geodat.get("regionName").unwrap().as_str().unwrap());
+    
+    
+                let mut geodata: ip::IP = ip::IP::default();
+                geodata.created_at = timestamp;
+                geodata.ip = geoip;
+                geodata.lat = geolat;
+                geodata.lon = geolon;
+                geodata.isp = geoisp;
+                geodata.is_banned = is_banned;
+                geodata.banned_times = match is_banned {false => 0, true => 1};
+                geodata.country = geocountry;
+                geodata.countrycode = geocountrycode;
+                geodata.city = geocity;
+                geodata.region = georegionname;
+                geodata.warnings = 1;
   
-              let geocountry = String::from(geodat.get("country").unwrap().as_str().unwrap());
-              let geocity = String::from(geodat.get("city").unwrap().as_str().unwrap());
-              let geocountrycode = String::from(geodat.get("countryCode").unwrap().as_str().unwrap());
-              let georegionname = String::from(geodat.get("regionName").unwrap().as_str().unwrap());
   
-  
-              let mut geodata: ip::IP = ip::IP::default();
-              geodata.created_at = timestamp;
-              geodata.ip = geoip;
-              geodata.lat = geolat;
-              geodata.lon = geolon;
-              geodata.isp = geoisp;
-              geodata.is_banned = is_banned;
-              geodata.banned_times = match is_banned {false => 0, true => 1};
-              geodata.country = geocountry;
-              geodata.countrycode = geocountrycode;
-              geodata.city = geocity;
-              geodata.region = georegionname;
-              geodata.warnings = 1;
-
-
-            
-              sender.send(Action::GotGeo(geodata, x.clone(), false)).unwrap_or_default(); // false, GeoData was acquired freshly
+              
+                sender.send(Action::GotGeo(geodata, x.clone(), false)).unwrap_or_default(); // false, GeoData was acquired freshly
+              } else {
+                let fetchmsg = format!("  Could not find location for IP {} ", geoip);
+                sender.send(Action::InternalLog(fetchmsg)).expect("Fetchlog message failed to send");
+              }
             });
             
           }
@@ -636,7 +643,10 @@ impl Component for Startup <'_> {
               let blockmsg = format!(" {} Blocked {} ",self.apptheme.symbol_block , reason);
               tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
             }
-          }        
+          } else {
+            let blockmsg = format!(" {} IP already blocked {} :", self.apptheme.symbol_block, ip.ip);
+            tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");            
+          }       
 
         }
 
@@ -811,13 +821,17 @@ impl Component for Startup <'_> {
       },
 
       Action::BanIP(x) => {
-
+        let cip = x.clone();
+        let symb = self.apptheme.symbol_ban.clone();
+        let _symb = self.apptheme.symbol_ban.clone();
         if !x.is_banned {
 
           let besure = self.f2b_check_banned(&x.ip);
-          if !besure {
+          
+          if !besure {        
             let tx = self.action_tx.clone().unwrap();
-            let symb = self.apptheme.symbol_ban.clone();
+            
+            //let cip = x.clone();
             tokio::spawn(async move {
               tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
               // check if is banned
@@ -840,17 +854,33 @@ impl Component for Startup <'_> {
                 let fetchmsg = format!(" {} Banned IP: {}", symb, &x.ip);
                 tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Ban IP message failed to send");
               } else {
+                let fetchmsg = format!(" {} Banned IP: {}", symb, &x.ip);
+                tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Ban IP message failed to send");                 
                 tx.send(Action::Banned(false)).expect("Failed to Ban ...");
               }
             });
           } else {
+            let blockmsg = format!(" {} IP already banned {}", _symb, &cip.ip);
+            tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");   
             tx.send(Action::Banned(true)).expect("Failed to Ban ...");
           }
+          tx.send(Action::Banned(true)).expect("Failed to Ban ...");
+        } else {
+          let blockmsg = format!(" {} IP already banned {}", _symb, &cip.ip);
+          tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");  
           tx.send(Action::Banned(true)).expect("Failed to Ban ...");
         }
       },
       Action::UnbanIP(x) => {
-        if x.is_banned {
+        let cip = x.clone();
+        let mut besure: bool = false;
+        if !x.is_banned {
+          besure = self.f2b_check_banned(&x.ip);
+        } else {
+          // x is banned
+          besure = true;
+        }
+        if besure {
           let tx = self.action_tx.clone().unwrap();
           let symb = self.apptheme.symbol_unblock.clone();
           tokio::spawn(async move {
@@ -875,9 +905,14 @@ impl Component for Startup <'_> {
               let fetchmsg = format!(" {} Unbanned IP: {}", symb, &x.ip);
               tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unban IP message failed to send");
             } else {
-              tx.send(Action::Unbanned(false)).expect("Failed to Unban !!!");
+              let fetchmsg = format!(" {} Unbanned IP: {}", symb, &x.ip);
+              tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unban IP message failed to send");
+              tx.send(Action::Unbanned(false)).expect("Failed to Unban !!!"); // idfkgetit
             }
           });
+        } else {
+          let blockmsg = format!(" ! IP is not banned {}", &cip.ip);
+          tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");   
         }
       },      
 
