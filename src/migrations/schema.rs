@@ -14,7 +14,7 @@ pub mod ip;
 
 
 // Tests need to be run sequentially on non-existant db
-#[cfg(test)]
+//#[cfg(test)]
 mod test {
     use crate::migrations::schema;
     use crate::migrations::schema::{message, isp, city, region, country, ip};
