@@ -337,9 +337,11 @@ impl<'a> Home<'a> {
     let selected_ip: String;
     let sel_idx = self.iplist.state.selected();
     if !self.iplist.items.is_empty() && self.ipstring.is_empty() && self.iomode == IOMode::Follow {
-      let sel_idx = sel_idx.unwrap();
-      selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
-      self.ipstring = selected_ip;
+      if sel_idx.is_some() {
+        let sel_idx = sel_idx.unwrap();
+        selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
+        self.ipstring = selected_ip;
+      }
     }
 
 
@@ -372,9 +374,12 @@ impl<'a> Home<'a> {
     let selected_ip: String;
     let sel_idx = self.iplist.state.selected();
     if !self.iplist.items.is_empty() && self.ipstring.is_empty()  && self.iomode == IOMode::Follow {
-      let sel_idx = sel_idx.unwrap();
-      selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
-      self.ipstring = selected_ip;
+      if sel_idx.is_some() {
+        let sel_idx = sel_idx.unwrap();
+        selected_ip = self.iplist.items[sel_idx].clone().IP.ip;
+        self.ipstring = selected_ip;
+      }
+
     }
 
 
@@ -772,9 +777,9 @@ impl Component for Home<'_> {
       Action::EnterQuery => {self.last_mode = self.mode; self.mode = Mode::Query; self.displaymode = DisplayMode::Query;},
       Action::ExitQuery => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
       Action::EnterBan => {self.last_mode = self.mode; self.mode = Mode::Ban; self.iperror = String::default(); self.displaymode = DisplayMode::Ban;},
-      Action::ExitBan => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
+      Action::ExitBan => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal; self.ipstring = String::from("");},
       Action::EnterUnban => {self.last_mode = self.mode; self.mode = Mode::Unban; self.iperror = String::default(); self.displaymode = DisplayMode::Unban;},
-      Action::ExitUnban => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
+      Action::ExitUnban => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal; self.ipstring = String::from("");},
       Action::InternalLog(x) => {self.internal_logs.items.push(x); self.internal_logs.trim_to_length(10); self.internal_logs.next();},
       Action::StartupGotHome(x) => {
         let lat = x.lat.clone().parse::<f64>().unwrap();
@@ -914,14 +919,18 @@ impl Component for Home<'_> {
       },
       Action::Banned(x) => {
         if x {self.infotext = String::from("BANNED");
-          list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitBan);
+          if self.mode == Mode::Ban {
+            list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitBan);
+          }
+          
         }
-        self.ipstring = String::from("");
+        
       },
       Action::Unbanned(x) => {
-        self.ipstring = String::from("");
         if x {self.infotext = String::from("BANNED");}
+        if self.mode == Mode::Unban {
           list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::ExitUnban);
+        }
       },
       _ => {},
     }

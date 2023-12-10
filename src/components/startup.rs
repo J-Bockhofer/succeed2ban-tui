@@ -637,14 +637,14 @@ impl Component for Startup <'_> {
             //let blockmsg = format!("{}    [succeed2ban.filter]      Blocked IP {} - Filter [ {} ] ", timestamp, ip.ip, reasons.join(" "));
             //tx.send(Action::IONotify(blockmsg)).expect("Blocklog message failed to send");
   
-            let blockmsg = format!(" {} Blocked IP {} :", self.apptheme.symbol_block, ip.ip);
+            let blockmsg = format!(" {} Blocked IP {} ", self.apptheme.symbol_block, ip.ip);
             tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
             for reason in reasons {
               let blockmsg = format!(" {} Blocked {} ",self.apptheme.symbol_block , reason);
               tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
             }
           } else {
-            let blockmsg = format!(" {} IP already blocked {} :", self.apptheme.symbol_block, ip.ip);
+            let blockmsg = format!(" {} IP already blocked {} ", self.apptheme.symbol_block, ip.ip);
             tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");            
           }       
 
@@ -873,7 +873,7 @@ impl Component for Startup <'_> {
       },
       Action::UnbanIP(x) => {
         let cip = x.clone();
-        let mut besure: bool = false;
+        let besure: bool;
         if !x.is_banned {
           besure = self.f2b_check_banned(&x.ip);
         } else {

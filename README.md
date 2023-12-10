@@ -18,7 +18,7 @@ Issues / Todos:
 1. Stopping of watchers does not work without Ctrl+C after shutdown !!!
 2. Some colors may default to default terminal colors which breaks the theme
 3. Actions need refactor badly
-4. Configuration of fail2ban log path and Hotkeys
+4. Configuration of fail2ban log path
 5. Refactor for testing
 6. Text wrapping
 
@@ -43,7 +43,7 @@ I once had trouble setting up fail2ban so I had to spent some time looking at lo
 I then build a similar app in Python, which was much more limited and limiting. 
 After deciding to learn Rust I thought this was a good opportunity to spent even more time looking at logs. So here we are.
 
-succeed2Ban-tui monitors journalctl and fail2ban SSH logs. 
+succeed2ban-tui monitors journalctl and fail2ban SSH logs. 
 It fetches geodata for incoming IPs from [ip-api.com](https://ip-api.com/). 
 Stores geodata in a SQLite file in order to keep necessary requests to a minimum and to review log statistics.
 

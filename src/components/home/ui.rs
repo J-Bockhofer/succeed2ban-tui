@@ -9,7 +9,7 @@ pub fn create_internal_logs<'a>(home: &'a Home) -> List<'a> {
     .iter()
     .map(|i| {
         let line = Line::from(i.as_str()); // let mut lines = vec![Line::from(i.0)];
-        ListItem::new(line).style(home.apptheme.styles_app.default_style.bg(home.apptheme.colors_app.background_darkest.color)).fg(home.apptheme.colors_app.text_color.shade(-0.5))
+        ListItem::new(line).style(home.apptheme.styles_app.default_style.bg(home.apptheme.colors_app.background_darkest.color)).fg(if !home.apptheme.is_light{home.apptheme.colors_app.text_color.shade(-0.5)}else {home.apptheme.colors_app.text_color.shade(0.5)})
     })
     .collect();
 
@@ -51,10 +51,11 @@ pub fn create_io_list<'a>(
           bg_style = Style::default().bg(theme.colors_app.background_darkest.color);
          } else {
           bg_style = Style::default().bg(theme.colors_app.background_darkest.color);
-        }
-        
+        }       
       } else {
-        bg_style = Style::default().bg(theme.colors_app.background_text_bright.color);
+        if theme.is_light { bg_style = Style::default().bg(theme.colors_app.error_color.color);}
+        else { bg_style = Style::default().bg(theme.colors_app.background_text_bright.color);}
+        
       }
 
       if i.2 == selected_ip {
@@ -356,10 +357,11 @@ pub fn create_query_popup<'a>(home: &'a Home)-> impl Widget + 'a {
   querytext.push(queryerror);
 
   let querybox = Paragraph::new(querytext)
-  .set_style(Style::default())
+  .set_style(Style::new().fg(home.apptheme.colors_app.text_color.color))
   .block(Block::default()
   .bg(home.apptheme.colors_app.background_darkest.color)
   .borders(Borders::ALL)
+  .border_style(home.apptheme.styles_app.border_style)
   .title("Query"));
   querybox
 
