@@ -16,12 +16,17 @@ Only made for myself to learn Rust, use at own discretion.
 Issues / Todos:
 
 1. Stopping of watchers does not work without Ctrl+C after shutdown !!!
-2. Some colors may default to default terminal colors which breaks the theme
-3. Actions need refactor badly
-4. Configuration of fail2ban log path
-5. Refactor for testing
-6. Text wrapping
-7. Bans are not correctly logged in the db
+    Don't manually stop the watchers, as it may create a zombie process!
+
+2. Actions need refactor badly
+
+3. Configuration of fail2ban log path
+
+4. Refactor for testing
+
+5. Text wrapping
+
+6. Bans are not correctly logged in the db
 
 Only works off the default fail2ban log path for now @ `/var/log/fail2ban.log`
 
