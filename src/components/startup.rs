@@ -23,7 +23,7 @@ use tui_input::{backend::crossterm::EventHandler, Input};
 use super::{Component, Frame};
 use crate::gen_structs::StatefulList;
 use crate::themes::ThemeContainer;
-use crate::{action::Action, config::key_event_to_string, themes, animations::Animation, migrations::schema, geofetcher};
+use crate::{action::Action, config::key_event_to_string, config::Config, themes, animations::Animation, migrations::schema, geofetcher};
 use crate::migrations::schema::{message, isp, city, region, country, ip};
 
 
@@ -57,6 +57,7 @@ pub enum Mode {
 
 #[derive(Default)]
 pub struct Startup <'a>{
+  config: Config,
   pub show_help: bool,
   pub counter: usize,
   pub app_ticker: usize,
@@ -317,6 +318,11 @@ impl Component for Startup <'_> {
     self.action_tx = Some(tx);
     Ok(())
   }
+  
+  fn register_config_handler(&mut self, config: Config) -> Result<()> {
+    self.config = config;
+    Ok(())
+  }
 
   fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
     self.last_events.push(key.clone());
@@ -330,10 +336,10 @@ impl Component for Startup <'_> {
           KeyCode::Esc => {return Ok(Some(Action::Quit))},
           KeyCode::BackTab => {self.countdown_to_start = 1;},
           KeyCode::Tab => {self.countdown_to_start = 1;}
-          _ => {},
+          _ => {self.input.handle_event(&crossterm::event::Event::Key(key));},
         }
         
-        Action::Render},
+        Action::Blank},
       _ =>  {self.input.handle_event(&crossterm::event::Event::Key(key));
       Action::Blank},
     };

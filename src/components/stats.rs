@@ -1,4 +1,5 @@
 pub mod ui;
+use ui::Timeframe;
 
 pub mod enums;
 use enums::{Mode, DisplayMode, DrawMode, SelectionMode, SortMode, SortState, BlockMode};
@@ -58,6 +59,7 @@ pub struct Stats {
   pub display_mode: DisplayMode,
   pub block_mode: BlockMode,
   pub sort_mode: SortMode,
+  pub selected_timeframe: Timeframe,
   //
   pub countries: StatefulList<(Country, Vec<chrono::DateTime<chrono::FixedOffset>>, Vec<StatIP>)>,
   pub full_regions: Vec<(Region, Vec<chrono::DateTime<chrono::FixedOffset>>, Vec<StatIP>)>,
@@ -78,6 +80,8 @@ pub struct Stats {
   //
   pub apptheme: Theme,
   pub available_themes: Themes,
+
+  
 }
 
 impl <'a> Stats  {
@@ -285,6 +289,26 @@ impl <'a> Stats  {
       }
     }
   }
+
+  pub fn previous_timeframe(&mut self) {
+    match self.selected_timeframe {
+      Timeframe::Day => {self.selected_timeframe = Timeframe::Year;},
+      Timeframe::Week => {self.selected_timeframe = Timeframe::Day;},
+      Timeframe::Month => {self.selected_timeframe = Timeframe::Week;},
+      Timeframe::Year => {self.selected_timeframe = Timeframe::Month;},
+    }
+  }
+
+  pub fn next_timeframe(&mut self) {
+    match self.selected_timeframe {
+      Timeframe::Day => {self.selected_timeframe = Timeframe::Week;},
+      Timeframe::Week => {self.selected_timeframe = Timeframe::Month;},
+      Timeframe::Month => {self.selected_timeframe = Timeframe::Year;},
+      Timeframe::Year => {self.selected_timeframe = Timeframe::Day;},
+    }
+  }
+
+
 }
 
 impl Component for Stats {
@@ -433,8 +457,12 @@ impl Component for Stats {
                 StatAction::SortBlocked => {self.sort_mode = SortMode::Blocked; self.sort_by_selected_mode()?;},
 
                 StatAction::ExitStats => {return Ok(Some(Action::StatsHide));}
-                StatAction::Block => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Block;}}
-                StatAction::Unblock => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Unblock;}}
+                StatAction::Block => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Block;}},
+                StatAction::Unblock => {if self.mode == Mode::Block {self.mode = Mode::Normal; self.display_mode = DisplayMode::Normal; } else {self.mode = Mode::Block; self.display_mode = DisplayMode::Confirm; self.block_mode = BlockMode::Unblock;}},
+
+                StatAction::PreviousTimeframe => {self.previous_timeframe();},
+                StatAction::NextTimeframe => {self.next_timeframe();},
+                
                 _ => {}
               }
             }
@@ -495,8 +523,14 @@ impl Component for Stats {
         // timestamp chart == barchart -> bar for every day with number of messages 
         let sel_country = self.countries.state.selected();
         if sel_country.is_some() && self.countries.items.len() > 0 {
-            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.countries.items[sel_country.unwrap()].clone().1);
-            let dtbars_country = ui::create_barchart(&self.apptheme, bars, "Log entries per Day");
+            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.countries.items[sel_country.unwrap()].clone().1, self.selected_timeframe);
+            let titlestr = format!("Log entries per {}", match self.selected_timeframe {
+              Timeframe::Day => {"Day"},
+              Timeframe::Week => {"Week"},
+              Timeframe::Month => {"Month"},
+              Timeframe::Year => {"Year"},
+            });
+            let dtbars_country = ui::create_barchart(&self.apptheme, bars, &titlestr);
             f.render_widget(dtbars_country, layout_country[1]);
 
             let overview = ui::make_country_overview(self);
@@ -505,7 +539,7 @@ impl Component for Stats {
 
         let sel_region = self.regions.state.selected();
         if sel_region.is_some() && self.regions.items.len() > 0{
-            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.regions.items[sel_region.unwrap()].clone().1);
+            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.regions.items[sel_region.unwrap()].clone().1, self.selected_timeframe);
             let dtbars_region = ui::create_barchart(&self.apptheme, bars, "Log entries per Day");
             f.render_widget(dtbars_region, layout_region[1]);
 
@@ -515,7 +549,7 @@ impl Component for Stats {
 
         let sel_city = self.cities.state.selected();
         if sel_city.is_some() && self.cities.items.len() > 0{
-            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.cities.items[sel_city.unwrap()].clone().1);
+            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.cities.items[sel_city.unwrap()].clone().1, self.selected_timeframe);
             let dtbars_city = ui::create_barchart(&self.apptheme, bars, "Log entries per Day");
             f.render_widget(dtbars_city, layout_city[1]);
 
@@ -525,7 +559,7 @@ impl Component for Stats {
 
         let sel_isp = self.isps.state.selected();
         if sel_isp.is_some() && self.isps.items.len() > 0{
-            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.isps.items[sel_isp.unwrap()].clone().1);
+            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.isps.items[sel_isp.unwrap()].clone().1, self.selected_timeframe);
             let dtbars_isp = ui::create_barchart(&self.apptheme, bars, "Log entries per Day");
             f.render_widget(dtbars_isp, layout_isp[1]);
 
@@ -535,7 +569,7 @@ impl Component for Stats {
 
         let sel_ip = self.ips.state.selected();
         if sel_ip.is_some() && self.ips.items.len() > 0 {
-            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.ips.items[sel_ip.unwrap()].clone().timestamps);
+            let bars = ui::make_bars_for_timestamps(&self.apptheme, self.ips.items[sel_ip.unwrap()].clone().timestamps, self.selected_timeframe);
             let dtbars_ip = ui::create_barchart(&self.apptheme, bars, "Log entries per Day");
             f.render_widget(dtbars_ip, layout_ip[1]);
 

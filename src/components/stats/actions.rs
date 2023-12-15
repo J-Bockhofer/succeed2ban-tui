@@ -5,7 +5,7 @@ use crate::{action::Action, migrations::schema::ip::IP};
 use tokio::time::{self, Duration};
 use super::{Stats, enums::{SelectionMode, SortMode, SortState}};
 
-///  Fetches Country data from DB, also fetches all related data
+///  Fetches Country data from DB, also fetches all related data (City, Region, ISP)
 pub fn refresh_countries(tx: UnboundedSender<Action>) -> Result<()> {
   // 🔃
   tokio::spawn(async move {

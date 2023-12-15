@@ -34,7 +34,6 @@
       
     },
     "Stats":{
-      "<w>": "Help", // A way to help in Main Screen
       "<Ctrl-d>": "Quit", // Another way to quit
       "<Ctrl-c>": "Quit", // Yet another way to quit
       "<Ctrl-z>": "Suspend", // Suspend the application
@@ -48,6 +47,11 @@
       "<a>": "SortAlphabetical",
       "<s>": "SortWarnings",
       "<d>": "SortBlocked",
+
+      // Switch Chart Timeframe
+      "<j>": "PreviousTimeframe",
+      "<k>": "NextTimeframe",
     }
   }
+
 }

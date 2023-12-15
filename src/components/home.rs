@@ -677,13 +677,13 @@ impl Component for Home<'_> {
                 '8' => {self.add_to_capacitystring('8'); Action::Render}, 
                 '9' => {self.add_to_capacitystring('9'); Action::Render},
                 '0' => {self.add_to_capacitystring('0'); Action::Render},
-                '+'|'-' => {Action::SubmittedCapacity}
+                '+'|'-' => {Action::Home(HomeAction::SubmittedCapacity)}
                 _ => {//Action::Render
                   Action::Blank}
               }
             },          
             KeyCode::Backspace => {self.rm_last_char_from_capacitystring(); Action::Render},
-            KeyCode::Enter => {if self.submit_capacity() {Action::SubmittedCapacity} else {self.iostreamed_capacity_input = String::from(""); Action::Blank}},
+            KeyCode::Enter => {if self.submit_capacity() {Action::Home(HomeAction::SubmittedCapacity)} else {self.iostreamed_capacity_input = String::from(""); Action::Blank}},
             _ => {self.input.handle_event(&crossterm::event::Event::Key(key)); Action::Blank  }
           }
         },
@@ -805,12 +805,18 @@ impl Component for Home<'_> {
           HomeAction::Static => {self.iomode = IOMode::Static; return Ok(Some(Action::Blank))},
 
           // IO Stream
-          HomeAction::First => {return Ok(Some(Action::LogsFirst))},
-          HomeAction::Previous => {return Ok(Some(Action::LogsPrevious))},
-          HomeAction::Next => {return Ok(Some(Action::LogsNext))},
-          HomeAction::Last => {return Ok(Some(Action::LogsLast))},
-          HomeAction::Unselect => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))},
-          HomeAction::SetCapacity => { return Ok(Some(Action::SetCapacity))},
+          HomeAction::LogsFirst => {self.stored_styled_iostreamed.state.select(Some(0))},
+          HomeAction::LogsPrevious => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.previous();}},
+          HomeAction::LogsNext => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.next();}},
+          HomeAction::LogsLast => {        
+            if self.stored_styled_iostreamed.items.len() > 0 {
+            let idx = Some(self.stored_styled_iostreamed.items.len() - 1);
+            self.stored_styled_iostreamed.state.select(idx);
+            }
+          },
+          HomeAction::LogsUnselect => {self.stored_styled_iostreamed.unselect(); return Ok(Some(Action::Blank))},
+          HomeAction::SetCapacity => { self.last_mode = self.mode; self.mode = Mode::SetIOCapacity; self.displaymode = DisplayMode::SetIOCapacity;},
+          HomeAction::SubmittedCapacity => {self.mode = Mode::Normal; self.displaymode = DisplayMode::Normal;},
 
           HomeAction::DrawAll => {self.drawmode = DrawMode::All},
           HomeAction::DrawSticky => {self.drawmode = DrawMode::Sticky},
@@ -820,29 +826,14 @@ impl Component for Home<'_> {
         }
       }
 
-      //General
+      //General / hasnt been refactored yet
       Action::ConfirmClearLists => {self.last_mode = self.mode; self.mode = Mode::ConfirmClear; self.displaymode = DisplayMode::ConfirmClear;},
       Action::AbortClearLists => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
       Action::ConfirmedClearLists => { self.clear_lists(); self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
-      Action::SetCapacity => {self.last_mode = self.mode; self.mode = Mode::SetIOCapacity; self.displaymode = DisplayMode::SetIOCapacity;},
-      Action::SubmittedCapacity => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
+
+      //Action::SubmittedCapacity => {self.mode = self.last_mode; self.displaymode = DisplayMode::Normal;},
       Action::SelectTheme(x) => {self.select_new_theme(x); self.make_charsoup();},
 
-      // List Actions
-      // -- LOG LIST -- iostreamed
-      //Action::LogsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsNext);}, // deprec
-      Action::LogsNext => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.next();}},
-      //Action::LogsSchedulePrevious => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsPrevious);}, // {list_actions::schedule_previous_loglist(self.command_tx.clone().unwrap());},
-      Action::LogsPrevious => {if self.stored_styled_iostreamed.items.len() > 0 {self.stored_styled_iostreamed.previous();}},
-      //Action::LogsScheduleFirst => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsFirst);}, // deprec
-      Action::LogsFirst => {  self.stored_styled_iostreamed.state.select(Some(0)) },
-      //Action::LogsScheduleLast => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::LogsLast);}, // deprec
-      Action::LogsLast => {  
-        if self.stored_styled_iostreamed.items.len() > 0 {
-          let idx = Some(self.stored_styled_iostreamed.items.len() - 1);
-          self.stored_styled_iostreamed.state.select(idx);
-        }
-      },
       // -- IP LIST -- iplist
       Action::IPsScheduleNext => {list_actions::schedule_generic_action(self.command_tx.clone().unwrap(), Action::IPsNext);}, // deprec
       Action::IPsNext => {            

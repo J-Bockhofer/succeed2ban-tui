@@ -272,11 +272,11 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
   let key_draw_sticky = get_first_key_by_action(keymap, Action::Home(HomeAction::DrawSticky));
   let key_draw_decay = get_first_key_by_action(keymap, Action::Home(HomeAction::DrawDecay));
 
-  let key_first = get_first_key_by_action(keymap, Action::Home(HomeAction::First));
-  let key_prev = get_first_key_by_action(keymap, Action::Home(HomeAction::Previous));
-  let key_next = get_first_key_by_action(keymap, Action::Home(HomeAction::Next));
-  let key_last = get_first_key_by_action(keymap, Action::Home(HomeAction::Last));
-  let key_unsel = get_first_key_by_action(keymap, Action::Home(HomeAction::Unselect));
+  let key_first = get_first_key_by_action(keymap, Action::Home(HomeAction::LogsFirst));
+  let key_prev = get_first_key_by_action(keymap, Action::Home(HomeAction::LogsPrevious));
+  let key_next = get_first_key_by_action(keymap, Action::Home(HomeAction::LogsNext));
+  let key_last = get_first_key_by_action(keymap, Action::Home(HomeAction::LogsLast));
+  let key_unsel = get_first_key_by_action(keymap, Action::Home(HomeAction::LogsUnselect));
   let key_capac = get_first_key_by_action(keymap, Action::Home(HomeAction::SetCapacity));
 
 

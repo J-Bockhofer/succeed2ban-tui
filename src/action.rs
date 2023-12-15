@@ -31,29 +31,39 @@ pub enum StatAction { // take stuff from main Action enum?
   SortAlphabetical,
   SortWarnings,
   SortBlocked,
+
+  NextTimeframe,
+  PreviousTimeframe,
 } 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum HomeAction {
+
   DrawAll,
   DrawSticky,
   DrawDecay,
+
   Query,
   EnterStats,
+
   Logs,
   Map,
   Clear,
+
   Ban,
+
   Unban,
 
-  First,
-  Previous,
-  Next,
-  Last,
-  Unselect,
+  LogsFirst,
+  LogsPrevious,
+  LogsNext,
+  LogsLast,
+  LogsUnselect,
   SetCapacity,
+  SubmittedCapacity,
 
   Follow,
   Static,
+
 }
 
 
@@ -85,19 +95,6 @@ pub enum Action {
   ConfirmedClearLists,
   ClearLists,
 
-  SetCapacity,
-  SubmittedCapacity,
-
-  // List state actions
-  // -- LOG LIST -- iostreamed
-  //LogsScheduleNext,
-  //LogsSchedulePrevious,
-  LogsNext,
-  LogsPrevious,
-  //LogsScheduleFirst,
-  //LogsScheduleLast,
-  LogsFirst,
-  LogsLast,
   // -- IP LIST -- iplist
   IPsScheduleNext,
   IPsSchedulePrevious,
@@ -221,6 +218,7 @@ impl<'de> Deserialize<'de> for Action {
           "StartupDone" => Ok(Action::StartupDone),
           // Home Actions //
           // General
+
           "Query" => Ok(Action::Home(HomeAction::Query)),
           "DrawAll" =>  Ok(Action::Home(HomeAction::DrawAll)),
           "DrawSticky" =>  Ok(Action::Home(HomeAction::DrawSticky)),
@@ -231,14 +229,17 @@ impl<'de> Deserialize<'de> for Action {
           "Clear" => Ok(Action::Home(HomeAction::Clear)),
           "Ban" => Ok(Action::Home(HomeAction::Ban)),
           "Unban" => Ok(Action::Home(HomeAction::Unban)),
-          "First" => Ok(Action::Home(HomeAction::First)),
-          "Previous" => Ok(Action::Home(HomeAction::Previous)),
-          "Next" => Ok(Action::Home(HomeAction::Next)),
-          "Last" => Ok(Action::Home(HomeAction::Last)),
-          "Unselect" => Ok(Action::Home(HomeAction::Unselect)),
+          // Logs List / IO Streamed
+          "First" => Ok(Action::Home(HomeAction::LogsFirst)),
+          "Previous" => Ok(Action::Home(HomeAction::LogsPrevious)),
+          "Next" => Ok(Action::Home(HomeAction::LogsNext)),
+          "Last" => Ok(Action::Home(HomeAction::LogsLast)),
+          "Unselect" => Ok(Action::Home(HomeAction::LogsUnselect)),
           "SetCapacity" => Ok(Action::Home(HomeAction::SetCapacity)),
+
           "Follow" => Ok(Action::Home(HomeAction::Follow)),
           "Static" => Ok(Action::Home(HomeAction::Static)),
+
 
           // Stat Actions //
           // General
@@ -250,6 +251,9 @@ impl<'de> Deserialize<'de> for Action {
           "SortAlphabetical" => Ok(Action::Stats(StatAction::SortAlphabetical)),
           "SortWarnings" => Ok(Action::Stats(StatAction::SortWarnings)),
           "SortBlocked" => Ok(Action::Stats(StatAction::SortBlocked)),
+
+          "NextTimeframe" => Ok(Action::Stats(StatAction::NextTimeframe)),
+          "PreviousTimeframe" => Ok(Action::Stats(StatAction::PreviousTimeframe)),
           
           // Error
           data if data.starts_with("Error(") => {

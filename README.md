@@ -1,11 +1,11 @@
 # succeed2ban-tui
 
-Made with 
-[ratatui](https://github.com/ratatui-org/ratatui/) 
-[async-template](https://github.com/ratatui-org/ratatui-async-template) 
+Made with:
+- [ratatui](https://github.com/ratatui-org/ratatui/) 
+- [async-template](https://github.com/ratatui-org/ratatui-async-template) 
 
 ![VHS](Map.PNG)
-(The Map screen, shows the location of IPs from incoming log-in attempts)
+The Map screen, shows the location of IPs from incoming log-in attempts
 
 ## Short
 
@@ -21,6 +21,7 @@ Issues / Todos:
 4. Configuration of fail2ban log path
 5. Refactor for testing
 6. Text wrapping
+7. Bans are not correctly logged in the db
 
 Only works off the default fail2ban log path for now @ `/var/log/fail2ban.log`
 
@@ -28,11 +29,13 @@ Only works off the default fail2ban log path for now @ `/var/log/fail2ban.log`
 
 1. cargo run
 
-2. Press Tab to skip Startup menu
+2. Press `Tab` to skip Startup menu countdown.
 
 3. Start fail2ban and/or journalctl watcher
 
 4. Watch
+
+Press `w` for displaying the help / hotkeys!
 
 
 ![Main](Main_help.PNG)
@@ -43,9 +46,14 @@ I once had trouble setting up fail2ban so I had to spent some time looking at lo
 I then build a similar app in Python, which was much more limited and limiting. 
 After deciding to learn Rust I thought this was a good opportunity to spent even more time looking at logs. So here we are.
 
+
 succeed2ban-tui monitors journalctl and fail2ban SSH logs. 
+
 It fetches geodata for incoming IPs from [ip-api.com](https://ip-api.com/). 
+
 Stores geodata in a SQLite file in order to keep necessary requests to a minimum and to review log statistics.
+
+Your home IP is fetched from [ident.me](https://ident.me/) for displaying connection lines on map.
 
 ### Stat screen
 
@@ -60,4 +68,5 @@ Allows for blocking based on:
 
 But in the end this is more of an overinflated cMatrix with tail -f on top. So enjoy your CPU cycles :)
 
-[![CI](https://github.com//ratui/workflows/CI/badge.svg)](https://github.com//ratui/actions)
+Feel free to report any issues you find or suggestions you have!
+

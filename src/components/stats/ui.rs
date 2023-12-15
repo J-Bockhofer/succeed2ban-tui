@@ -530,6 +530,8 @@ pub fn popup_help(theme: &Theme, config: Config) -> impl Widget + '_ {
   let key_sort_warn = get_first_key_by_action(keymap, Action::Stats(StatAction::SortWarnings));
   let key_sort_block = get_first_key_by_action(keymap, Action::Stats(StatAction::SortBlocked));
 
+  let key_previous_timeframe = get_first_key_by_action(keymap, Action::Stats(StatAction::PreviousTimeframe));
+  let key_next_timeframe = get_first_key_by_action(keymap, Action::Stats(StatAction::NextTimeframe));
 
   let headerstyle = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_text_bright.color);
   let linestyle = Style::default().fg(theme.colors_app.text_color.color);
@@ -562,6 +564,12 @@ pub fn popup_help(theme: &Theme, config: Config) -> impl Widget + '_ {
   helptext.push(Line::from(Span::styled(format!(" {} :          ABC           Sorts selected List by Alpha-Numeric", key_sort_alph), linestyle)));
   helptext.push(Line::from(Span::styled(format!(" {} :          Warn          Sorts selected List by number of warnings", key_sort_warn), linestyle_alt)));
   helptext.push(Line::from(Span::styled(format!(" {} :          Block         Sorts selected List by blocked / unblocked", key_sort_block), linestyle)));
+  let mut hheader = Line::from(format!("---           Charts       ---                                                                 -"
+  ));
+  hheader.patch_style(headerstyle);
+  helptext.push(hheader);  
+  helptext.push(Line::from(Span::styled(format!(" {} :          Previous      Previous Timeframe", key_previous_timeframe), linestyle)));
+  helptext.push(Line::from(Span::styled(format!(" {} :          Next          Next Timeframe", key_next_timeframe), linestyle_alt)));
 
   let infoblock = Paragraph::new(helptext)
   .set_style(Style::default())
@@ -669,21 +677,41 @@ pub fn popup_un_block_selected(stats: &Stats, is_block: bool) -> impl Widget + '
 
 // CHARTS // ---------------------------------------------------------------- //
 
-pub fn make_bars_for_timestamps<'a>(theme: &Theme, timestamps: Vec<DateTime<FixedOffset>>) -> Vec<Bar<'a>> {
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+pub enum Timeframe {
+  #[default]
+  Day,
+  Week,
+  Month,
+  Year,
+}
+
+pub fn make_bars_for_timestamps<'a>(theme: &Theme, timestamps: Vec<DateTime<FixedOffset>>, timeframe: Timeframe) -> Vec<Bar<'a>> {
   if timestamps.is_empty() {
     return vec![Bar::default()];
   };
   let mut babars: Vec<Bar> = vec![];
-  let mut aday: DateTime<FixedOffset> = timestamps[0];
-  let mut num_aday: usize = 0;
+  let mut adate: DateTime<FixedOffset> = timestamps[0];
+  let mut num_adate: usize = 0;
   let mut color_switcher: bool = false;
   for stamp in timestamps {
-    let day_diff = stamp.day() - aday.day();
-    if day_diff > 0 {
+    let date_diff = match timeframe {
+      Timeframe::Day => {stamp.day() - adate.day()},
+      Timeframe::Week => {stamp.iso_week().week() - adate.iso_week().week()},
+      Timeframe::Month => {stamp.month() - adate.month()},
+      Timeframe::Year => {(stamp.year() - adate.year()) as u32},
+    };
+    if date_diff > 0 {
       // new bar
       let abar = Bar::default()
-        .label(aday.format("%d/%m").to_string().into())
-        .value(num_aday as u64)
+        .label( match timeframe {
+          Timeframe::Day => {adate.format("%d/%m").to_string().into()},
+          Timeframe::Week => {adate.format("%U").to_string().into()},
+          Timeframe::Month => {adate.format("%Y/%b").to_string().into()},
+          Timeframe::Year => {adate.format("%Y").to_string().into()},
+        }  
+        )
+        .value(num_adate as u64)
         .style(if color_switcher {
           color_switcher = false;
           Style::default().fg(theme.colors_app.accent_color_a.color)
@@ -693,17 +721,22 @@ pub fn make_bars_for_timestamps<'a>(theme: &Theme, timestamps: Vec<DateTime<Fixe
         })
         .value_style(Style::default().bg(theme.colors_app.background_brightest.color));
       babars.push(abar);
-      num_aday = 0;
-      aday = stamp;
+      num_adate = 0;
+      adate = stamp;
     } else {
       // add to old bar
-      num_aday = num_aday.saturating_add(1);
+      num_adate = num_adate.saturating_add(1);
     }
   }
   if babars.is_empty() {
     let abar = Bar::default()
-      .label(aday.to_string().into())
-      .value(num_aday as u64)
+      .label(match timeframe {
+        Timeframe::Day => {adate.format("%d/%m").to_string().into()},
+        Timeframe::Week => {adate.format("%U").to_string().into()},
+        Timeframe::Month => {adate.format("%Y/%b").to_string().into()},
+        Timeframe::Year => {adate.format("%Y").to_string().into()},
+      })
+      .value(num_adate as u64)
       .style(if color_switcher {
         //color_switcher = false;
         Style::default().fg(theme.colors_app.accent_color_a.color)
