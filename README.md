@@ -4,7 +4,7 @@ Made with:
 - [ratatui](https://github.com/ratatui-org/ratatui/) 
 - [async-template](https://github.com/ratatui-org/ratatui-async-template) 
 
-![VHS](Map.PNG)
+![VHS](examples/map.gif)
 The Map screen, shows the location of IPs from incoming log-in attempts
 
 ## Short

@@ -56,29 +56,31 @@ Output examples/demo.gif
 
 Require echo
 
+Set Padding 0
 Set Shell "bash"
 Set FontSize 16
 Set Width 1920
 Set Height 1080
 
-Type "cargo run --bin ratui" Sleep 500ms  Enter
+Type "cargo run" Sleep 500ms  Enter
 
-Sleep 25s
-Tab@1s 1
-Down@1s 3
-Enter
-Sleep 1s
-Down@1s 1
-Enter
-Sleep 1s
-Tab@1s 1
-Type "w" Enter
-Sleep 5s
-Type "w" Enter
-Sleep 1s
-Type "q" Enter
-Type "175.213.30.200" Sleep 1s Enter
 Sleep 2s
-Type "q" Enter
-Type "a" Enter 
+# Countdown to start
+Down@1s 1
+Tab@500ms 1
+Sleep 3s
+Tab@1s 1
+Down@1s 4
+Enter
+Sleep 5s
+Tab@1s 1
+Type "w" 
+Sleep 5s
+Type "w"
+Sleep 1s
+Type "q"
+Type "1.12.60.11" Sleep 1s Enter
+Sleep 2s
+Type "q"
+Type "a"
 Sleep 10s

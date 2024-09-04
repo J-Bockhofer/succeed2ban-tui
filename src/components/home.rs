@@ -1005,7 +1005,7 @@ impl Component for Home<'_> {
       // display popups/overlays
       match self.displaymode {
         DisplayMode::Help => {
-          let p_area = centered_rect(f.size(), 35, 50);
+          let p_area = centered_rect(f.size(), 45, 55);
           f.render_widget(Clear, p_area);
           f.render_widget(ui::create_help_popup(self),p_area);
           },

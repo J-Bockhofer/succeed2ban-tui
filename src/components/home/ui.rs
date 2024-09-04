@@ -292,7 +292,7 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
   // make text
   let mut helptext: Vec<Line> = vec![];
   helptext.push(                Line::from(Span::styled(format!("Key:          Name          Info"), linestyle)));
-  let mut hheader =   Line::from(                     format!("---           General       ---                                                                 -"));
+  let mut hheader =   Line::from(                     format!("---           General       ---                                                                      -"));
   hheader.patch_style(headerstyle);
   helptext.push(hheader);    
   helptext.push(                Line::from(Span::styled(format!("Arrowkeys:    Select        Select item in IPs or Actions dependent on mode"), linestyle)));
@@ -306,22 +306,22 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
   helptext.push(                Line::from(Span::styled(format!(" {} :          Map           Maximizes Map", key_map), linestyle)));
   helptext.push(                Line::from(Span::styled(format!(" {} :          Clear         Clears IP and I/O Lists", key_clear), linestyle_alt)));
   helptext.push(                Line::from(Span::styled(format!("Enter:        Execute       Context dependent selection or execution"), linestyle)));
-  let mut hheader =   Line::from(                     format!("---           Drawmode      ---                                           {}                -", active_drawmode)); // for more spaces bc inserted string has six characters
+  let mut hheader =   Line::from(                     format!("---           Drawmode      ---                                           {}                         -", active_drawmode)); // for more spaces bc inserted string has six characters
   hheader.patch_style(headerstyle);
   helptext.push(hheader);
   helptext.push(                Line::from(Span::styled(format!(" {} :          All           Draws all connections all the time", key_draw_all), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Sticky        Draws only the selection connection", key_draw_sticky), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!(" {} :          Sticky        Draws only the selected connection", key_draw_sticky), linestyle_alt)));
   helptext.push(                Line::from(Span::styled(format!(" {} :          Decay         Draws each connection for 10 seconds", key_draw_decay), linestyle)));
-  let mut ioheader =  Line::from(                     format!("---           I/O Stream    ---                                 Capacity: {}                -", home.iostreamed_capacity));
+  let mut ioheader =  Line::from(                     format!("---           I/O Stream    ---                                 Capacity: {}                         -", home.iostreamed_capacity));
   ioheader.patch_style(headerstyle);
   helptext.push(ioheader);
-  helptext.push(                Line::from(Span::styled(format!(" {} :          First         Select oldest line in I/O Streamed", key_first), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Previous      Select previous line in I/O Streamed", key_prev), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Next          Select next line in I/O Streamed", key_next), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Last          Select latest line in I/O Streamed", key_last), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Unselect      Reset line selection in I/O Streamed", key_unsel), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Set Capacity  Input a new capacity for I/O Streamed", key_capac), linestyle_alt)));
-  let mut hheader =   Line::from(                     format!("---           IO-Mode       ---                                           {}                -", active_iomode)); // four more spaces bc inserted string has six characters
+  helptext.push(                Line::from(Span::styled(format!(" {} :          First         Select oldest line", key_first), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!(" {} :          Previous      Select previous", key_prev), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!(" {} :          Next          Select next line", key_next), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!(" {} :          Last          Select latest line", key_last), linestyle_alt)));
+  helptext.push(                Line::from(Span::styled(format!(" {} :          Unselect      Reset line selection", key_unsel), linestyle)));
+  helptext.push(                Line::from(Span::styled(format!(" {} :          Set Capacity  Input a new capacity", key_capac), linestyle_alt)));
+  let mut hheader =   Line::from(                     format!("---           IO-Mode       ---                                           {}                         -", active_iomode)); // four more spaces bc inserted string has six characters
   hheader.patch_style(headerstyle);
   helptext.push(hheader);
   helptext.push(                Line::from(Span::styled(format!(" {} :          Follow        Auto-selects the last received IP", key_follow), linestyle)));
