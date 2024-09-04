@@ -45,7 +45,7 @@ pub struct App {
   jctl_handle: Option<JoinHandle<()>>,
   dbconn: Option<Connection>,
 
-  
+  f2b_logpath: String,
   f2b_cancellation_token: CancellationToken,
   f2b_watcher: Option<INotifyWatcher>,
   jctl_cancellation_token: CancellationToken,
@@ -73,10 +73,10 @@ impl App {
       f2bw_handle: Option::None,
       jctl_handle: Option::None,
       dbconn: Option::None,
+      f2b_logpath: String::from("/var/log/fail2ban.log"),
       f2b_cancellation_token: CancellationToken::default(),
       f2b_watcher: Option::None,
       jctl_cancellation_token: CancellationToken::default(),
-
     })
   }
 
@@ -191,14 +191,15 @@ impl App {
               
               let _f2b_cancellation_token = token.child_token();
               self.f2b_cancellation_token = token;
-              let path = String::from("/var/log/fail2ban.log"); 
+              
 
               
+              let path = if self.config.logpath.is_empty() {self.f2b_logpath.clone()} else {self.config.logpath.clone()};
+              log::info!("{}", path);
               // set up watcher
               let (_tx, _rx) = std::sync::mpsc::channel();
               let mut watcher: notify::INotifyWatcher = notify::RecommendedWatcher::new(_tx, notify::Config::default())?;
               watcher.watch(path.as_ref(), notify::RecursiveMode::NonRecursive)?;
-
 
               let filewatcher = tokio::spawn(async move  {
                 let _res = tasks::notify_change(&path, action_tx2, _rx);

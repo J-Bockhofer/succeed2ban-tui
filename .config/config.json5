@@ -52,6 +52,6 @@
       "<j>": "PreviousTimeframe",
       "<k>": "NextTimeframe",
     }
-  }
-
+  },
+  "logpath": "text.txt",
 }

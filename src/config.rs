@@ -31,6 +31,8 @@ pub struct Config {
   pub keybindings: KeyBindings,
   #[serde(default)]
   pub styles: Styles,
+  #[serde(default)]
+  pub logpath: String,
 }
 
 impl Config {
@@ -41,7 +43,7 @@ impl Config {
     let mut builder = config::Config::builder()
       .set_default("_data_dir", data_dir.to_str().unwrap())?
       .set_default("_config_dir", config_dir.to_str().unwrap())?;
-
+    log::info!("{:?}: config dir", config_dir);
     let config_files = [
       ("config.json5", config::FileFormat::Json5),
       ("config.json", config::FileFormat::Json),
@@ -74,6 +76,7 @@ impl Config {
         user_styles.entry(style_key.clone()).or_insert_with(|| style.clone());
       }
     }
+
 
     Ok(cfg)
   }

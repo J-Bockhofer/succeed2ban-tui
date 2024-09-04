@@ -16,7 +16,7 @@ lazy_static! {
   pub static ref CONFIG_FOLDER: Option<PathBuf> =
     std::env::var(format!("{}_CONFIG", PROJECT_NAME.clone())).ok().map(PathBuf::from);
   pub static ref LOG_ENV: String = format!("{}_LOGLEVEL", PROJECT_NAME.clone());
-  pub static ref LOG_FILE: String = format!("{}.log", env!("CARGO_PKG_NAME"));
+  pub static ref LOG_FILE: String = format!("{}.log", env!("CARGO_PKG_NAME")); // env!("CARGO_PKG_NAME")
 }
 
 fn project_directory() -> Option<ProjectDirs> {

@@ -20,15 +20,18 @@ Issues / Todos:
 
 2. Actions need refactor badly
 
-3. Configuration of fail2ban log path
+3. Refactor for testing
 
-4. Refactor for testing
+4. Text wrapping
 
-5. Text wrapping
+5. Bans are not correctly logged in the db
 
-6. Bans are not correctly logged in the db
+6. Does not check for active ssh connections so you might ban yourself
 
-Only works off the default fail2ban log path for now @ `/var/log/fail2ban.log`
+Works off the default fail2ban log path @ `/var/log/fail2ban.log`
+
+But you can also set your own by including the configuration file from this repo in ~/.config/succeed2ban-tui/ and setting the `logpath` field at the bottom.
+
 
 ## Usage
 

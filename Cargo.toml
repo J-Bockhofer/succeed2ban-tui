@@ -1,10 +1,10 @@
 [package]
-name = "ratui"
+name = "succeed2ban-tui"
 version = "0.1.0"
 edition = "2021"
-description = "ratuitesting"
+description = "A TUI for monitoring fail2ban logs"
 
-authors = ["J-Bockhofer <joris.bockhofer@t-online.de>"]
+authors = ["J-Bockhofer"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
