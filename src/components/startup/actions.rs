@@ -1,7 +1,7 @@
 use chrono::Utc;
 use rusqlite::Connection;
 
-use crate::{action::Action, geofetcher::{self, deserialize_geolocation, fetch_geolocation}, database::schema::{city, country, ip::{self, IP}, isp, message, region}, tasks::{self, IOMessage, IOProducer}};
+use crate::{action::Action, database::schema::{self, city, country, ip::{self, IP}, isp, message, region}, geofetcher::{self, deserialize_geolocation, fetch_geolocation}, tasks::{self, IOMessage, IOProducer}};
 
 use super::{Mode, Startup};
 
@@ -81,28 +81,7 @@ impl <'a> Startup <'a> {
       let fetchmsg = format!(" {} Got location for IP {} ", symb, x.ip);
       tx.send(Action::InternalLog(fetchmsg)).expect("Fetchlog message failed to send");
 
-      if meta.country.is_blocked || meta.city.is_blocked || meta.isp.is_blocked || meta.region.is_blocked { 
-        if !x.is_banned && !is_ban {
-          tx.send(Action::BanIP(x.clone())).expect("Block failed to send");
-          let timestamp = chrono::offset::Local::now().to_rfc3339();
-          let mut reasons: Vec<String> = vec![];
-          if meta.country.is_blocked {reasons.push(format!("Country: {}", meta.country.name));}
-          if meta.region.is_blocked {reasons.push(format!("Region: {}", meta.region.name));}
-          if meta.city.is_blocked {reasons.push(format!("City: {}", meta.city.name));}
-          if meta.isp.is_blocked {reasons.push(format!("ISP: {}", meta.isp.name));}
-
-          let blockmsg = format!(" {} Blocked IP {} ", self.apptheme.symbol_block, x.ip);
-          tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
-          for reason in reasons {
-            let blockmsg = format!(" {} Blocked {} ",self.apptheme.symbol_block , reason);
-            tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
-          }
-        } else {
-          let blockmsg = format!(" {} IP already blocked {} ", self.apptheme.symbol_block, x.ip);
-          tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");            
-        }       
-
-      }
+      geo_block_and_log(x.clone(), is_ban, meta, tx.clone(), self.apptheme.symbol_block.clone());
 
       let timestamp = chrono::offset::Local::now().to_rfc3339();
       match iomsg {
@@ -119,6 +98,30 @@ impl <'a> Startup <'a> {
   }
 
 }
+
+fn geo_block_and_log(x: IP, is_ban: bool, meta: schema::MetaInfo, tx: tokio::sync::mpsc::UnboundedSender<Action>, symbol_block: String) {
+  if meta.country.is_blocked || meta.city.is_blocked || meta.isp.is_blocked || meta.region.is_blocked { 
+    if !x.is_banned && !is_ban {
+      tx.send(Action::BanIP(x.clone())).expect("Block failed to send");
+      let mut reasons: Vec<String> = vec![];
+      if meta.country.is_blocked {reasons.push(format!("Country: {}", meta.country.name));}
+      if meta.region.is_blocked {reasons.push(format!("Region: {}", meta.region.name));}
+      if meta.city.is_blocked {reasons.push(format!("City: {}", meta.city.name));}
+      if meta.isp.is_blocked {reasons.push(format!("ISP: {}", meta.isp.name));}
+
+      let blockmsg = format!(" {} Blocked IP {} ", symbol_block, x.ip);
+      tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
+      for reason in reasons {
+        let blockmsg = format!(" {} Blocked {} ", symbol_block , reason);
+        tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
+      }
+    } else {
+      let blockmsg = format!(" {} IP already blocked {} ", symbol_block, x.ip);
+      tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");            
+    }       
+  }
+}
+
 
 fn fetch_geolocation_and_report(ip: String, is_banned: bool, original_message: tasks::IOMessage, tx: tokio::sync::mpsc::UnboundedSender<Action>) {
     tokio::task::spawn(async move {      
