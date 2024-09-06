@@ -23,6 +23,7 @@ use tui_input::{backend::crossterm::EventHandler, Input};
 
 use super::{Component, Frame};
 use crate::gen_structs::StatefulList;
+use crate::tasks::{IOMessage, IOProducer};
 use crate::themes::ThemeContainer;
 use crate::{action::Action, config::key_event_to_string, config::Config, themes, animations::Animation, migrations::schema, geofetcher};
 use crate::migrations::schema::{message, isp, city, region, country, ip};
@@ -349,21 +350,29 @@ impl Component for Startup <'_> {
       Action::StartupConnect => {
         self.connect()?;        
       },
-      Action::IONotify(ref x) => {
+      Action::IONotify(iomsg) => {
         // got new line
-        let x = x.clone().deref().to_string();
+        let prod: IOProducer;
+        let catmsg = match iomsg.clone() {
+          IOMessage::SingleLine(x, p) => {
+            prod = p;
+            x},
+          IOMessage::MultiLine(vx, p) => {
+            prod = p;
+            vx.join(" ")
+          },
+        };
         let re = self.apptheme.ipregex.clone();
 
         let results: Vec<&str> = re
-          .captures_iter(&x)
+          .captures_iter(&catmsg)
           .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
           .collect();
 
         if results.is_empty() {
           // results were empty, might happen if journalctl sends error message -> in that case just insert the last ip into the message and try again
           if !self.last_ip.is_empty() {
-            let msg = x.clone();
-            let msg = format!("{} for {}", msg, self.last_ip);
+            let msg = crate::tasks::IOMessage::SingleLine(format!("{} for {}", catmsg, self.last_ip), prod);
             self.action_tx.clone().unwrap().send(Action::IONotify(msg))?;
           }
           return Ok(None)
@@ -374,7 +383,7 @@ impl Component for Startup <'_> {
         cip = results[0];
         // string contained an IPv4
         let mut is_banned = false;
-        if x.contains("Ban") {
+        if catmsg.contains("Ban") {
           is_banned = true;
         }
 
@@ -393,15 +402,15 @@ impl Component for Startup <'_> {
           // we have to fetch the data
           let sender = self.action_tx.clone().unwrap();
           self.fetching_ips.push(cip.to_string());
-          actions::fetch_geolocation_and_report(cip.to_string(), is_banned.clone(), x.clone(), sender);
+          actions::fetch_geolocation_and_report(cip.to_string(), is_banned.clone(), iomsg.clone(), sender);
         }
         else {
           // data is stored
           maybe_data.is_banned = is_banned;
-          self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data, x.clone(), true))?;  // return true, GeoData came from DB
+          self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data, iomsg.clone(), true))?;  // return true, GeoData came from DB
         }
       },
-      Action::GotGeo(x, y, z) => {
+      Action::GotGeo(x, iomsg, z) => {
         // Guard: if GeoData is from DB we return immediately, to not insert it again -> yes ofc insert it again.. how else to update u dingus?!
         //if z {return Ok(Option::None);} 
       
@@ -476,16 +485,22 @@ impl Component for Startup <'_> {
               x.is_banned, ip.warnings).unwrap();
         }
 
-        let mut is_jctl: bool = true;
-        let mut is_ban: bool = false;
-        if y.contains("++++") {
-          is_jctl = false;
-          if y.contains("Ban") {
-            is_ban = true;
+        let prod: IOProducer;
+
+        let catmsg = match iomsg.clone() {
+          IOMessage::SingleLine(x, p) => {
+            prod = p;
+            x
+          },
+          IOMessage::MultiLine(vx, p) => {
+            prod = p;
+            vx.join(" ")
           }
-        }
+        };
+        let is_jctl: bool = prod == IOProducer::Journal;
+        let is_ban  = catmsg.contains("Ban");
         let tx = self.action_tx.clone().unwrap();
-        tx.send(Action::PassGeo(ip.clone(), y.clone(), z)).expect("PassGeo failed to send");
+        tx.send(Action::PassGeo(ip.clone(), iomsg.clone(), z)).expect("PassGeo failed to send");
         let symb = if z {self.apptheme.symbol_db.clone()} else {self.apptheme.symbol_reqwest.clone()};
         let fetchmsg = format!(" {} Got location for IP {} ", symb, ip.ip);
         tx.send(Action::InternalLog(fetchmsg)).expect("Fetchlog message failed to send");
@@ -514,10 +529,16 @@ impl Component for Startup <'_> {
         }
 
         let timestamp = chrono::offset::Local::now().to_rfc3339();
-
-        let _ = message::insert_new_message(conn, Option::None, &timestamp, &y, &x.ip, &x.country, &x.region, &x.city, &x.isp, is_jctl, is_ban).unwrap();
-
-        
+        match iomsg {
+          IOMessage::SingleLine(msg, _) => {
+            message::insert_new_message(conn, Option::None, &timestamp, &msg, &x.ip, &x.country, &x.region, &x.city, &x.isp, is_jctl, is_ban).unwrap();
+          },
+          IOMessage::MultiLine(vx, _) => {
+            for msg in vx {
+              message::insert_new_message(conn, Option::None, &timestamp, &msg, &x.ip, &x.country, &x.region, &x.city, &x.isp, is_jctl, is_ban).unwrap();
+            }
+          },
+        }
         //self.stored_geo.push(x.clone()); 
       },
       Action::SubmitQuery(x) => {
@@ -541,7 +562,8 @@ impl Component for Startup <'_> {
           // spawn thread to send debounced messages
           tokio::spawn(async move{
             for msg in actmsgs {
-              tx.send(Action::PassGeo(ip.clone(), msg.text, true)).expect("PassGeo failed to send on query!"); 
+              let prod = if msg.is_jctl {IOProducer::Journal} else {IOProducer::Log};
+              tx.send(Action::PassGeo(ip.clone(), IOMessage::SingleLine(msg.text, prod), true)).expect("PassGeo failed to send on query!"); 
               tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;}
               // inefficient but else but require me to set up a duplicate receiver or refactor receive function
           });

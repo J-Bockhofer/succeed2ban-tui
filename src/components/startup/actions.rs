@@ -1,7 +1,7 @@
 use chrono::Utc;
 use rusqlite::Connection;
 
-use crate::{action::Action, geofetcher::{self, deserialize_geolocation, fetch_geolocation}, migrations::schema::ip};
+use crate::{action::Action, geofetcher::{self, deserialize_geolocation, fetch_geolocation}, migrations::schema::ip, tasks};
 
 use super::{Mode, Startup};
 
@@ -79,7 +79,7 @@ impl <'a> Startup <'a> {
 
 
 
-pub fn fetch_geolocation_and_report(ip: String, is_banned: bool, original_message: String, tx: tokio::sync::mpsc::UnboundedSender<Action>) {
+pub fn fetch_geolocation_and_report(ip: String, is_banned: bool, original_message: tasks::IOMessage, tx: tokio::sync::mpsc::UnboundedSender<Action>) {
     let handle = tokio::task::spawn(async move {      
         let geodat = fetch_geolocation(ip.as_str()).await.unwrap_or(serde_json::Value::default());
         let geodata = deserialize_geolocation(geodat, is_banned);

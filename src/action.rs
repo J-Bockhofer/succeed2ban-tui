@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{migrations::schema::{ip::IP, city::City, region::Region, isp::ISP, country::Country, message::MiniMessage}, themes::Themes};
+use crate::{migrations::schema::{city::City, country::Country, ip::IP, isp::ISP, message::MiniMessage, region::Region}, tasks, themes::Themes};
 use rusqlite::{Connection, Result};
 
 
@@ -116,14 +116,14 @@ pub enum Action {
   QueryNotFound(String),
 
   // Core
-  IONotify(String),
+  IONotify(tasks::IOMessage), // String tasks::IOMessage
   //FetchGeo(gen_structs::Geodata),
 
   // second string is the line, bool is if it came from IO or DB
-  GotGeo(IP, String, bool),
+  GotGeo(IP, tasks::IOMessage, bool),
   //
   /// 0: IP, 1: Line, 2: true if from DB, false if fresh
-  PassGeo(IP, String, bool),
+  PassGeo(IP, tasks::IOMessage, bool),
 
   InternalLog(String),
   // Ban Actions
@@ -270,11 +270,6 @@ impl<'de> Deserialize<'de> for Action {
             } else {
               Err(E::custom(format!("Invalid Resize format: {}", value)))
             }
-          },
-          // IONotify
-          data if data.starts_with("IONotify(") => {
-            let notify_msg = data.trim_start_matches("IONotify(").trim_end_matches(")");
-            Ok(Action::IONotify(notify_msg.to_string()))            
           },
           _ => Err(E::custom(format!("Unknown Action variant: {}", value))),
         }

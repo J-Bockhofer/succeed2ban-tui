@@ -1,5 +1,6 @@
 use std::io::{Seek, BufReader, BufRead};
 use notify::{Watcher, RecursiveMode, Result, RecommendedWatcher, Config, Event};
+use serde::Serialize;
 use std::sync::mpsc::Receiver;
 
 use tokio::{
@@ -18,6 +19,18 @@ use tokio::io::AsyncReadExt;
 use std::process::{Command, Stdio, ChildStdout};
 use std::io::Read;
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum IOProducer {
+  Journal,
+  Log
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum IOMessage {
+  SingleLine(String, IOProducer),
+  MultiLine(Vec<String>, IOProducer),
+}
+
 // pass another receiver for the cancellation token? // _cancellation_token: CancellationToken)
 pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>, rx: Receiver<Result<Event>>) -> Result<()> {
   let mut pos = std::fs::metadata(path)?.len();
@@ -31,7 +44,18 @@ pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>, rx: Re
     let (tx, rx) = std::sync::mpsc::channel();
     let mut watcher: notify::INotifyWatcher = RecommendedWatcher::new(tx, Config::default())?;
     watcher.watch(path.as_ref(), RecursiveMode::NonRecursive)?; */
+/*     tokio::select! {
+      _ = _f2b_cancellation_token.cancelled() => {
+        drop(watcher);
+        //_res.abort();
+        todo!("Got dropped, so all should be fine");
+        //return;
+      }
+      _ = _res => {
 
+        todo!("Notify Change ended before it was cancelled, should not happen")
+      }
+    } */
 
     // watch
     for res in rx {
@@ -66,14 +90,23 @@ pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>, rx: Re
                         }
 
                     }
-
-                    //println!("> {:?}", cline);
-                    msgs.push(cline.clone());                   
+                    if !cline.is_empty() {
+                      msgs.push(cline.clone());                 
+                    }
                 }
-                let addedlines = msgs.into_iter().collect::<Vec<String>>().join("++++");
+                
+                let msg = if msgs.len() == 1 {
+                  IOMessage::SingleLine(msgs[0].clone(), IOProducer::Log)
+                } else {
+                  IOMessage::MultiLine(msgs, IOProducer::Log)
+                };
+                _event_tx.send(Action::IONotify(msg)).unwrap();
+
+                //let addedlines = msgs.join("++++");
                 //println!("> {}", addedlines);
+                //log::info!("Added potential multiline string");
                 //tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-                _event_tx.send(Action::IONotify(addedlines)).unwrap();
+                //_event_tx.send(Action::IONotify(addedlines)).unwrap();
             }
             Err(error) => { println!("{error:?}")},
         }
@@ -146,7 +179,7 @@ pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, mut cancel_rx:
     loop {
        let msg = action_rx.try_recv().unwrap_or_default();
        if !msg.is_empty() {
-        event_tx.send(Action::IONotify(msg)).unwrap();
+        event_tx.send(Action::IONotify(IOMessage::SingleLine(msg, IOProducer::Journal))).unwrap();
         //println!("Received {}", msg);
        }
        
@@ -197,7 +230,7 @@ pub async fn monitor_journalctl_2(event_tx:UnboundedSender<Action>, _cancellatio
                 //println!("Newline detected");
                 //println!("{}", str::from_utf8(&pre_line).unwrap());
                 let line = String::from_utf8(pre_line).unwrap();
-                event_tx.send(Action::IONotify(line)).unwrap_or_else(|err| {
+                event_tx.send(Action::IONotify(IOMessage::SingleLine(line, IOProducer::Journal))).unwrap_or_else(|err| {
                   println!("Send Error: {}", err);
                 });
                 pre_line = vec![];

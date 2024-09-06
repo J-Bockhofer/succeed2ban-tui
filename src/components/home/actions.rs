@@ -1,21 +1,38 @@
 use ratatui::prelude::Style;
+use crate::tasks::{self, IOProducer};
+
 use super::{Home, StyledLine, IP, PointData, IPListItem, IOMode, Action, UnboundedSender, Result};
 
 /// Styles the incoming lines from either journalctl or fail2ban log.
 // Fail2Ban may send a String that contains multiple lines which are delimited by "++++".
 // Styled lines (saved in home.stored_styled_iostreamed) contain colored substrings / words.
-pub fn style_incoming_message(home: &mut Home, msg: String) {
+pub fn style_incoming_message(home: &mut Home, msg: tasks::IOMessage) {
   let mut dbg: String;
 
-  let mut last_io = String::from("Journal");
   home.last_username = String::from("");
 
-  if msg.contains("++++") {
-    // message is from Fail2Ban
-    last_io = String::from("Fail2Ban");
-  }
-  let collected: Vec<&str> = msg.split("++++").collect(); // new line delimiter in received lines, if more than one got added simultaneously
-  home.debug_me = collected.clone().len().to_string();
+  let prod: IOProducer;
+  let collected = match msg {
+    tasks::IOMessage::SingleLine(x, p) => {
+      prod = p;
+      vec![x]
+    },
+    tasks::IOMessage::MultiLine(vx, p) => {
+      prod = p;
+      vx
+    }
+  };
+  let last_io = match prod {
+    IOProducer::Journal => {
+      String::from("Journal")
+    },
+    IOProducer::Log => {
+      String::from("Fail2Ban")
+    }
+  };
+
+  //let collected: Vec<&str> = msg.split("++++").collect(); // new line delimiter in received lines, if more than one got added simultaneously
+  // home.debug_me = collected.clone().len().to_string();
   //home.debug_me = collected.clone().len().to_string();
 
   for tmp_line in collected {
@@ -26,7 +43,7 @@ pub fn style_incoming_message(home: &mut Home, msg: String) {
     // do word_map matching first then regex match splitting
     // look for ip quickly to send it out to the list
     let results: Vec<&str> = home.apptheme.ipregex
-    .captures_iter(tmp_line)
+    .captures_iter(&tmp_line)
     .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
     .collect();
     let mut cip: &str = "";
@@ -86,7 +103,7 @@ pub fn style_incoming_message(home: &mut Home, msg: String) {
 }
 
 /// Parses received IP geodata, calculates direction to home, passes to style message
-pub fn parse_passed_geo(home: &mut Home, x: IP, y: String, z: bool) -> Result<()> {
+pub fn parse_passed_geo(home: &mut Home, x: IP, y: tasks::IOMessage, z: bool) -> Result<()> {
   
   style_incoming_message(home, y.clone());
 
