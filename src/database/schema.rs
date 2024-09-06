@@ -71,9 +71,6 @@ pub fn update_db_on_new_log(conn: &Connection, x:ip::IP, from_db:bool) -> MetaIn
     return MetaInfo { country, region, city, isp }
 }
 
-
-
-
 pub fn update_ip_db_on_new_log(conn: &Connection, x: ip::IP, from_db: bool) {
     if !from_db {
       let _ = ip::insert_new_IP(conn, 
@@ -100,9 +97,11 @@ pub fn update_ip_db_on_new_log(conn: &Connection, x: ip::IP, from_db: bool) {
 // Tests need to be run sequentially on non-existant db
 //#[cfg(test)]
 mod test {
-    use crate::database::schema;
+    use crate::database::schema::{self, update_ip_db_on_new_log};
     use crate::database::schema::{message, isp, city, region, country, ip};
     use rusqlite::{Connection, Result};
+
+    use super::update_db_on_new_log;
 
     fn cleanup_db(filename: &str) {
         let file = std::path::Path::new(filename);
@@ -259,10 +258,75 @@ mod test {
         cleanup_db(db_name);
         Ok(())
     }
+
+
+    #[test]
+    pub fn test_db_update_on_new_log() -> Result<()>{
+        let db_name ="test_update.db";
+        let conn = Connection::open(db_name)?;
+        schema::create_tables(&conn)?;
+        insert_all(&conn)?;
+
+        // "111.233.456.678", "2022-03-11 23:45:31:512", "3.12", "59.79", "Telecum", "Humburg", Some("Undetussen"), "Doitschland", Some("DDE"), 0, false, 0).expect("IP insertion failed")
+        let before_city = city::select_city(&conn, "Humburg")?;
+
+        let ip = ip::IP{
+            ip: "111.233.456.678".to_string(),
+            created_at: "2022-03-11 23:45:31:512".to_string(),
+            lon: "3.12".to_string(),
+            lat: "59.79".to_string(),
+            isp: "Telecum".to_string(),
+            city: "Humburg".to_string(),
+            region: "Undetussen".to_string(),
+            country: "Doitschland".to_string(),
+            countrycode: "DDE".to_string(),
+            banned_times: 0,
+            is_banned: false,
+            warnings: 1,
+        };
+        let meta = update_db_on_new_log(&conn, ip, true);
+
+        let after_city = city::select_city(&conn, "Humburg")?;
+
+        assert_eq!(before_city.unwrap().warnings+1, after_city.unwrap().warnings);
+
+        cleanup_db(db_name);
+        Ok(())
+    } 
+
+    #[test]
+    pub fn test_db_update_ip_on_new_log() -> Result<()>{
+        let db_name ="test_update_ip.db";
+        let conn = Connection::open(db_name)?;
+        schema::create_tables(&conn)?;
+        insert_all(&conn)?;
+
+        // "111.233.456.678", "2022-03-11 23:45:31:512", "3.12", "59.79", "Telecum", "Humburg", Some("Undetussen"), "Doitschland", Some("DDE"), 0, false, 0).expect("IP insertion failed")
+        let before_ip = ip::select_ip(&conn, "111.233.456.678")?;
+
+        let ip = ip::IP{
+            ip: "111.233.456.678".to_string(),
+            created_at: "2022-03-11 23:45:31:512".to_string(),
+            lon: "3.12".to_string(),
+            lat: "59.79".to_string(),
+            isp: "Telecum".to_string(),
+            city: "Humburg".to_string(),
+            region: "Undetussen".to_string(),
+            country: "Doitschland".to_string(),
+            countrycode: "DDE".to_string(),
+            banned_times: 0,
+            is_banned: false,
+            warnings: 0,
+        };
+        update_ip_db_on_new_log(&conn, ip, true);
+
+        let after_ip= ip::select_ip(&conn, "111.233.456.678")?;
+
+        assert_eq!(before_ip.unwrap().warnings+1, after_ip.unwrap().warnings);
+
+        cleanup_db(db_name);
+        Ok(())
+    } 
+
 }
-
-
-
-
-
 
