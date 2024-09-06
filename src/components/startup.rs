@@ -5,6 +5,7 @@ use std::process::Output;
 /// 
 /// 
 /// Holds the DB connection and handles queries.
+mod actions;
 
 use std::sync::OnceLock;
 
@@ -153,17 +154,7 @@ impl <'a> Startup <'a> {
     let dt = Utc::now();
     self.log_messages.push(format!("{}            init db", dt.to_string()));
 
-    self.dbconn.as_ref().unwrap().execute(country::CREATE_COUNTRY_DB_SQL, []).expect("Error setting up country db");
-
-    self.dbconn.as_ref().unwrap().execute(city::CREATE_CITY_DB_SQL, []).expect("Error setting up city db");
-
-    self.dbconn.as_ref().unwrap().execute(region::CREATE_REGION_DB_SQL, []).expect("Error setting up city db");
-
-    self.dbconn.as_ref().unwrap().execute(isp::CREATE_ISP_DB_SQL, []).expect("Error setting up ISP db");
-
-    self.dbconn.as_ref().unwrap().execute(ip::CREATE_IP_DB_SQL, []).expect("Error setting up IP db");
-
-    self.dbconn.as_ref().unwrap().execute(message::CREATE_MESSAGE_DB_SQL, []).expect("Error setting up IP db");
+    schema::create_tables(self.dbconn.as_ref().unwrap()).expect("Error setting up tables");
 
     let dt = Utc::now();
     self.log_messages.push(format!("{}            db ready", dt.to_string()));
@@ -195,13 +186,13 @@ impl <'a> Startup <'a> {
     lines[line].to_string()
   }
 
-  pub fn set_rng_points(mut self) -> Self {
+  fn set_rng_points(mut self) -> Self {
     let mut rng = rand::thread_rng();
     let num_lines: usize = rng.gen_range(0..20);
     let mut points: Vec<(f64,f64,f64,f64)> = vec![];
     for _ in 0..num_lines {
-        let x: f64 = 0.;//rng.gen_range(-180.0..180.0);
-        let y: f64 = 0.;//rng.gen_range(-90.0..90.0);
+        let x: f64 = 0.;
+        let y: f64 = 0.;
         let x2: f64 = rng.gen_range(-180.0..180.0);
         let y2: f64 = rng.gen_range(-90.0..90.0);
         points.push((x,y,x2,y2));
@@ -230,7 +221,7 @@ impl <'a> Startup <'a> {
       stdout = String::from_utf8(output.unwrap().stdout).unwrap();
     }  else {
       let fetchmsg = format!("   Failed to run fail2ban client for IP look-up");
-      self.action_tx.clone().unwrap().send(Action::InternalLog(fetchmsg)).expect("LOG: Fail to run message failed to send, yes... really... EpicFail");
+      self.action_tx.clone().unwrap().send(Action::InternalLog(fetchmsg)).expect("CRITICAL: Fail to run message failed to send, yes... really... EpicFail");
       stdout = String::from("");
     }  
     // extract the raw bytes that we captured and interpret them as a string        
@@ -261,7 +252,6 @@ impl <'a> Startup <'a> {
   }
 
   pub fn tick(&mut self) {
-    log::info!("Tick");
     self.num_ticks += 1;
     self.anim_dotdotdot.next();
     self.countdown_to_start = self.countdown_to_start.saturating_sub(1);
@@ -271,13 +261,12 @@ impl <'a> Startup <'a> {
   }
 
   pub fn render_tick(&mut self) {
-    log::debug!("Render Tick");
     self.elapsed_frames += 1.;
     self.anim_charsoup.next();
     
     if self.elapsed_frames == 1. {
         let mut rng = rand::thread_rng();
-        let x: f64 = 0.;//rng.gen_range(-180.0..180.0);
+        let x: f64 = 0.;
         let y: f64 = 0.;
         let x2: f64 = rng.gen_range(-180.0..180.0);
         let y2: f64 = rng.gen_range(-90.0..90.0);
@@ -358,62 +347,7 @@ impl Component for Startup <'_> {
         tx.send(Action::InternalLog(fetchmsg)).expect("Fetchlog message failed to send");
       }
       Action::StartupConnect => {
-        let dt = Utc::now();
-
-        //let my_local_ip = local_ip();
-        let tx = self.action_tx.clone().unwrap();
-        tokio::spawn(async move {
-          // get my local ip from somewhere
-          let my_local_ip = geofetcher::fetch_home().await.unwrap_or_default();
-
-          //if let Ok(my_local_ip) = my_local_ip {
-            let geodat = geofetcher::fetch_geolocation(my_local_ip.to_string().as_str()).await.unwrap_or(serde_json::Value::default());
-
-            let geoip = String::from(geodat.get("query").unwrap().as_str().unwrap());
-            let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string(); // ACTUALLY CRASHED HERE ON PI, CANT GET IP BEHIND ROUTER/ NAT
-            let geolon = geodat.get("lon").unwrap().as_number().unwrap().to_string();
-            let geoisp = String::from(geodat.get("isp").unwrap().as_str().unwrap());
-
-            let geocountry = String::from(geodat.get("country").unwrap().as_str().unwrap());
-            let geocity = String::from(geodat.get("city").unwrap().as_str().unwrap());
-            let geocountrycode = String::from(geodat.get("countryCode").unwrap().as_str().unwrap());
-            let georegionname = String::from(geodat.get("regionName").unwrap().as_str().unwrap());
-
-
-            let mut geodata: ip::IP = ip::IP::default();
-            geodata.created_at = String::from("");
-            geodata.ip = geoip;
-            geodata.lat = geolat;
-            geodata.lon = geolon;
-            geodata.isp = geoisp;
-            geodata.is_banned = false;
-            geodata.banned_times = 0;
-            geodata.country = geocountry;
-            geodata.countrycode = geocountrycode;
-            geodata.city = geocity;
-            geodata.region = georegionname;
-            geodata.warnings = 1;
-
-            tx.send(Action::StartupGotHome(geodata)).unwrap_or_default(); // false, GeoData was acquired freshly            
-            
-          //} else {
-          //  todo!("Error getting local IP: {:?}", my_local_ip);
-          //}
-        }
-        );
-
-
-        self.log_messages.push(format!("{}            Connecting to db", dt.to_string()));
-
-        let conn = Connection::open("iplogs.db")?;
-
-        self.dbconn = Some(conn);
-        self.create_db();
-
-        self.get_initial_stats();
-
-        self.mode = Mode::Done;
-        
+        self.connect()?;        
       },
       Action::IONotify(ref x) => {
         // got new line
@@ -424,122 +358,48 @@ impl Component for Startup <'_> {
           .captures_iter(&x)
           .filter_map(|capture| capture.get(1).map(|m| m.as_str()))
           .collect();
-        let cip: &str;
-        // filtered for IP
 
-
-        if !results.is_empty() {
-          cip = results[0];
-          // string contained an IPv4
-          let mut is_banned = false;
-          if x.contains("Ban") {
-            is_banned = true;
-          }
-
-          if self.last_ip != String::from(cip) {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            // check if is banned
-            let output = std::process::Command::new("fail2ban-client")
-              .arg("status")
-              .arg("sshd")
-              // Tell the OS to record the command's output
-              .stdout(std::process::Stdio::piped())
-              // execute the command, wait for it to complete, then capture the output
-              .output();
-              // Blow up if the OS was unable to start the program // No pls dont
-            let stdout: String;
-            if output.is_ok() {
-              stdout = String::from_utf8(output.unwrap().stdout).unwrap();
-            }  else {
-              let fetchmsg = format!("   Failed to run fail2ban client for IP look-up");
-              self.action_tx.clone().unwrap().send(Action::InternalLog(fetchmsg)).expect("LOG: Fail to run message failed to send, yes... really... EpicFail");
-              stdout = String::from("");
-            }  
-            // extract the raw bytes that we captured and interpret them as a string        
-            if stdout.contains(cip) {
-              is_banned = true;
-            }
-          };
-
-          //let mut is_in_list: bool = false;
-          let conn = self.dbconn.as_ref().unwrap();
-          //let conn2 = conn.clone();
-
-          let mut maybe_data = ip::select_ip(conn, cip).unwrap_or_default().take().unwrap_or_default();
-
-        
-          if maybe_data == ip::IP::default() {
-            // we have to fetch the data
-            let timestamp = chrono::offset::Local::now().to_rfc3339();
-  
-
-            self.last_ip = String::from(cip);
-
-            let req_ip = cip.to_string();
-            let sender = self.action_tx.clone().unwrap();
-            self.fetching_ips.push(req_ip.clone());
-
-            let handle = tokio::task::spawn(async move {
-              // perform some work here...
-              
-              let geodat = geofetcher::fetch_geolocation(req_ip.as_str()).await.unwrap_or(serde_json::Value::default());
-
-              let geoip = String::from(geodat.get("query").unwrap().as_str().unwrap());
-              
-              let _tester = geodat.get("lat");
-              if _tester.is_some() {
-                let geolat = geodat.get("lat").unwrap().as_number().unwrap().to_string(); // CRASH ON PI
-                let geolon = geodat.get("lon").unwrap().as_number().unwrap().to_string();
-                let geoisp = String::from(geodat.get("isp").unwrap().as_str().unwrap());
-    
-                let geocountry = String::from(geodat.get("country").unwrap().as_str().unwrap());
-                let geocity = String::from(geodat.get("city").unwrap().as_str().unwrap());
-                let geocountrycode = String::from(geodat.get("countryCode").unwrap().as_str().unwrap());
-                let georegionname = String::from(geodat.get("regionName").unwrap().as_str().unwrap());
-    
-    
-                let mut geodata: ip::IP = ip::IP::default();
-                geodata.created_at = timestamp;
-                geodata.ip = geoip;
-                geodata.lat = geolat;
-                geodata.lon = geolon;
-                geodata.isp = geoisp;
-                geodata.is_banned = is_banned;
-                geodata.banned_times = match is_banned {false => 0, true => 1};
-                geodata.country = geocountry;
-                geodata.countrycode = geocountrycode;
-                geodata.city = geocity;
-                geodata.region = georegionname;
-                geodata.warnings = 1;
-  
-  
-              
-                sender.send(Action::GotGeo(geodata, x.clone(), false)).unwrap_or_default(); // false, GeoData was acquired freshly
-              } else {
-                let fetchmsg = format!("  Could not find location for IP {} ", geoip);
-                sender.send(Action::InternalLog(fetchmsg)).expect("Fetchlog message failed to send");
-              }
-            });
-            
-          }
-          else {
-            // data is stored
-            self.last_ip = String::from(cip);
-            maybe_data.is_banned = is_banned;
-            self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data, x.clone(), true))?;  // return true, GeoData came from DB
-          }
-
-
-        } else {
+        if results.is_empty() {
           // results were empty, might happen if journalctl sends error message -> in that case just insert the last ip into the message and try again
           if !self.last_ip.is_empty() {
             let msg = x.clone();
             let msg = format!("{} for {}", msg, self.last_ip);
             self.action_tx.clone().unwrap().send(Action::IONotify(msg))?;
           }
-
+          return Ok(None)
         }
 
+        let cip: &str;
+        // filtered for IP
+        cip = results[0];
+        // string contained an IPv4
+        let mut is_banned = false;
+        if x.contains("Ban") {
+          is_banned = true;
+        }
+
+        if self.last_ip != String::from(cip) {
+          std::thread::sleep(std::time::Duration::from_millis(100));
+          // check if is banned
+          is_banned = self.f2b_check_banned(cip);
+        };
+
+        let conn = self.dbconn.as_ref().unwrap();
+
+        let mut maybe_data = ip::select_ip(conn, cip).unwrap_or_default().take().unwrap_or_default();
+        self.last_ip = String::from(cip);
+      
+        if maybe_data == ip::IP::default() {
+          // we have to fetch the data
+          let sender = self.action_tx.clone().unwrap();
+          self.fetching_ips.push(cip.to_string());
+          actions::fetch_geolocation_and_report(cip.to_string(), is_banned.clone(), x.clone(), sender);
+        }
+        else {
+          // data is stored
+          maybe_data.is_banned = is_banned;
+          self.action_tx.clone().unwrap().send(Action::GotGeo(maybe_data, x.clone(), true))?;  // return true, GeoData came from DB
+        }
       },
       Action::GotGeo(x, y, z) => {
         // Guard: if GeoData is from DB we return immediately, to not insert it again -> yes ofc insert it again.. how else to update u dingus?!
@@ -639,9 +499,6 @@ impl Component for Startup <'_> {
             if region.is_blocked {reasons.push(format!("Region: {}", region.name));}
             if city.is_blocked {reasons.push(format!("City: {}", city.name));}
             if isp.is_blocked {reasons.push(format!("ISP: {}", isp.name));}
-  
-            //let blockmsg = format!("{}    [succeed2ban.filter]      Blocked IP {} - Filter [ {} ] ", timestamp, ip.ip, reasons.join(" "));
-            //tx.send(Action::IONotify(blockmsg)).expect("Blocklog message failed to send");
   
             let blockmsg = format!(" {} Blocked IP {} ", self.apptheme.symbol_block, ip.ip);
             tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");
