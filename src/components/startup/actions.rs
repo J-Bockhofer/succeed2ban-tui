@@ -122,7 +122,6 @@ fn geo_block_and_log(x: IP, is_ban: bool, meta: schema::MetaInfo, tx: tokio::syn
   }
 }
 
-
 fn fetch_geolocation_and_report(ip: String, is_banned: bool, original_message: tasks::IOMessage, tx: tokio::sync::mpsc::UnboundedSender<Action>) {
     tokio::task::spawn(async move {      
         let geodat = fetch_geolocation(ip.as_str()).await.unwrap_or(serde_json::Value::default());

@@ -6,6 +6,8 @@ use std::process::Output;
 /// 
 /// Holds the DB connection and handles queries.
 mod actions;
+mod db_actions;
+mod f2b_actions;
 
 use std::sync::OnceLock;
 
@@ -357,33 +359,10 @@ impl Component for Startup <'_> {
         self.got_geo(x, iomsg, from_db)?;
         //self.stored_geo.push(x.clone()); 
       },
-      Action::SubmitQuery(x) => {
+      Action::SubmitQuery(querystr) => {
         let conn = self.dbconn.as_ref().unwrap();
-        let ip = ip::select_ip(conn, x.as_str()).unwrap_or_default().unwrap_or_default();
-
         let tx = self.action_tx.clone().unwrap();
-
-        let opmsgs = message::select_message_by_ip(conn, x.as_str()).unwrap();
-        let mut actmsgs: Vec<message::Message> = vec![];
-
-        for opmsg in opmsgs {
-          let msg = opmsg.unwrap_or(message::Message::default());
-          if msg != message::Message::default() {actmsgs.push(msg);}
-        }
-
-        if ip == ip::IP::default() {
-          // send back query not found
-          tx.send(Action::QueryNotFound(x)).expect("QueryNotFound failed to send!");
-        } else {
-          // spawn thread to send debounced messages
-          tokio::spawn(async move{
-            for msg in actmsgs {
-              let prod = if msg.is_jctl {IOProducer::Journal} else {IOProducer::Log};
-              tx.send(Action::PassGeo(ip.clone(), IOMessage::SingleLine(msg.text, prod), true)).expect("PassGeo failed to send on query!"); 
-              tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;}
-              // inefficient but else but require me to set up a duplicate receiver or refactor receive function
-          });
-        }        
+        db_actions::process_query(conn, querystr, tx);
       },
       Action::StatsGetCountries => {
         let conn = self.dbconn.as_ref().unwrap();
@@ -531,35 +510,7 @@ impl Component for Startup <'_> {
           
           if !besure {        
             let tx = self.action_tx.clone().unwrap();
-            
-            //let cip = x.clone();
-            tokio::spawn(async move {
-              tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-              // check if is banned
-              let output = std::process::Command::new("fail2ban-client")
-                .arg("set")
-                .arg("sshd")
-                .arg("banip")
-                .arg(&x.ip)
-                // Tell the OS to record the command's output
-                .stdout(std::process::Stdio::piped())
-                // execute the command, wait for it to complete, then capture the output
-                .output()
-                // Blow up if the OS was unable to start the program
-                .unwrap();
-      
-              // extract the raw bytes that we captured and interpret them as a string
-              let stdout = String::from_utf8(output.stdout).unwrap();
-              if stdout.contains("0") {
-                tx.send(Action::Banned(true)).expect("Failed to Ban ...");
-                let fetchmsg = format!(" {} Banned IP: {}", symb, &x.ip);
-                tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Ban IP message failed to send");
-              } else {
-                let fetchmsg = format!(" {} Banned IP: {}", symb, &x.ip);
-                tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Ban IP message failed to send");                 
-                tx.send(Action::Banned(false)).expect("Failed to Ban ...");
-              }
-            });
+            f2b_actions::send_ban(x.clone(), symb, tx);
           } else {
             let blockmsg = format!(" {} IP already banned {}", _symb, &cip.ip);
             tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");   
@@ -584,33 +535,7 @@ impl Component for Startup <'_> {
         if besure {
           let tx = self.action_tx.clone().unwrap();
           let symb = self.apptheme.symbol_unblock.clone();
-          tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-            // check if is banned
-            let output = std::process::Command::new("fail2ban-client")
-              .arg("set")
-              .arg("sshd")
-              .arg("unbanip")
-              .arg(&x.ip)
-              // Tell the OS to record the command's output
-              .stdout(std::process::Stdio::piped())
-              // execute the command, wait for it to complete, then capture the output
-              .output()
-              // Blow up if the OS was unable to start the program
-              .unwrap();
-    
-            // extract the raw bytes that we captured and interpret them as a string
-            let stdout = String::from_utf8(output.stdout).unwrap();
-            if stdout.contains("0") {
-              tx.send(Action::Unbanned(true)).expect("Failed to Unban !!!");
-              let fetchmsg = format!(" {} Unbanned IP: {}", symb, &x.ip);
-              tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unban IP message failed to send");
-            } else {
-              let fetchmsg = format!(" {} Unbanned IP: {}", symb, &x.ip);
-              tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unban IP message failed to send");
-              tx.send(Action::Unbanned(false)).expect("Failed to Unban !!!"); // idfkgetit
-            }
-          });
+          f2b_actions::send_unban(x.clone(), symb, tx);
         } else {
           let blockmsg = format!(" ! IP is not banned {}", &cip.ip);
           tx.send(Action::InternalLog(blockmsg)).expect("Blocklog message failed to send");   
