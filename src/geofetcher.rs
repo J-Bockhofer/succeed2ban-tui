@@ -1,4 +1,4 @@
-use crate::migrations::schema::ip::IP;
+use crate::database::schema::ip::IP;
 
 pub async fn fetch_geolocation(ip: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let url = format!("http://ip-api.com/json/{ip}");

@@ -1,5 +1,5 @@
 use tokio::time;
-use crate::migrations::schema::ip::IP;
+use crate::database::schema::ip::IP;
 use ratatui::prelude::Style;
 
 #[derive(Default, Clone)]

@@ -24,7 +24,7 @@ use crate::{
   tasks,
   geofetcher,
   gen_structs,
-  migrations::schema::ip::IP,
+  database::schema::ip::IP,
 };
 
 use regex::Regex;
@@ -196,13 +196,14 @@ impl App {
               
               let path = if self.config.logpath.is_empty() {self.f2b_logpath.clone()} else {self.config.logpath.clone()};
               log::info!("{}", path);
-              // set up watcher
+              // set up watcher, sends events to the receiver.
               let (_tx, _rx) = std::sync::mpsc::channel();
               let mut watcher: notify::INotifyWatcher = notify::RecommendedWatcher::new(_tx, notify::Config::default())?;
               watcher.watch(path.as_ref(), notify::RecursiveMode::NonRecursive)?;
 
               let filewatcher = tokio::spawn(async move  {
                 let _res = tasks::notify_change(&path, action_tx2, _rx);
+                log::info!("Started f2b watcher");
                   tokio::select! {
                     _ = _f2b_cancellation_token.cancelled() => {
                       drop(watcher);
@@ -224,13 +225,16 @@ impl App {
 
           Action::StopF2BWatcher => {
             self.f2b_cancellation_token.cancel();
-
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             if self.f2b_cancellation_token.is_cancelled() {
+              log::info!("Stopped f2b watcher");
               //todo!("Implement Action::StoppedF2BWatcher to inform Home")
             } else {
               std::thread::sleep(std::time::Duration::from_millis(10));
               action_tx.clone().send(Action::StopF2BWatcher).unwrap();
             }
+            log::info!("Stopped f2b watcher");
+            
             let fetchmsg = format!(" ❌ STOPPED fail2ban watcher");
             action_tx.clone().send(Action::InternalLog(fetchmsg)).expect("LOG: StopF2BWatcher message failed to send");
  /*            if let Some(handle) = self.f2bw_handle.take()  {

@@ -27,7 +27,7 @@ use chrono::{self, Datelike};
 use super::{Component, Frame};
 use crate::{action::{Action, StatAction}, config::{Config, KeyBindings, get_first_key_simple, get_first_key_by_action}, components::home::utils::centered_rect};
 
-use crate::{migrations::schema::{city::City, region::Region, isp::ISP, country::Country, message::MiniMessage, ip::IP},
+use crate::{database::schema::{city::City, region::Region, isp::ISP, country::Country, message::MiniMessage, ip::IP},
 themes::Theme, gen_structs::StatefulList, themes::Themes};
 
 
@@ -112,13 +112,11 @@ impl <'a> Stats  {
   }
 
   pub fn tick(&mut self) {
-    log::info!("Tick");
     self.app_ticker = self.app_ticker.saturating_add(1);
     self.last_events.drain(..);
   }
 
   pub fn render_tick(&mut self) {
-    log::debug!("Render Tick");
     self.render_ticker = self.render_ticker.saturating_add(1);
   }
 

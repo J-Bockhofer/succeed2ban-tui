@@ -1,7 +1,7 @@
 use chrono::{DateTime, Datelike, FixedOffset};
 
 use super::StatIP;
-use crate::migrations::schema::message::MiniMessage;
+use crate::database::schema::message::MiniMessage;
 
 pub fn convert_strings_to_utc(strings: Vec<String>) -> Vec<DateTime<FixedOffset>> {
   let mut ts: Vec<DateTime<FixedOffset>> = vec![];

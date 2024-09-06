@@ -21,12 +21,87 @@ pub fn create_tables(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+pub struct MetaInfo {
+    pub country: country::Country,
+    pub region: region::Region,
+    pub city: city::City,
+    pub isp: isp::ISP
+  }
+  
+pub fn update_db_on_new_log(conn: &Connection, x:ip::IP, from_db:bool) -> MetaInfo {
+    let mut country = country::select_country(conn, x.country.as_str()).unwrap_or_default().unwrap_or_default();
+    if country == country::Country::default() {
+        let _ = country::insert_new_country(conn, x.country.as_str(), Some(x.countrycode.as_str()), match x.is_banned {false => Some(0), true => Some(1)}, Some(1), false).unwrap();
+    }
+    else {
+        country.warnings += 1;
+        if !from_db && x.is_banned {country.banned += 1;}
+        let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings), country.is_blocked).unwrap();
+    }
+
+    let mut region = region::select_region(conn, x.region.as_str()).unwrap_or_default().unwrap_or_default();
+    if region == region::Region::default() {
+        let _ = region::insert_new_region(conn, x.region.as_str(), x.country.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1), false).unwrap();
+    }
+    else {
+        region.warnings += 1;
+        if !from_db && x.is_banned {region.banned += 1;}
+        let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings), region.is_blocked).unwrap();
+    }
+
+    let mut city = city::select_city(conn, x.city.as_str()).unwrap_or_default().unwrap_or_default();
+    if city == city::City::default() {
+        let _ = city::insert_new_city(conn, x.city.as_str(), x.country.as_str(), x.region.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1), false).unwrap();
+    }
+    else {
+        city.warnings += 1;
+        if !from_db && x.is_banned {city.banned += 1;}
+        let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(),city.region.as_str(), Some(city.banned), Some(city.warnings), city.is_blocked).unwrap();
+    }
+
+    let mut isp: isp::ISP = isp::select_isp(conn, x.isp.as_str()).unwrap_or_default().unwrap_or_default();
+    if isp == isp::ISP::default() {
+        let _ = isp::insert_new_ISP(conn, x.isp.as_str(), match x.is_banned {false => Some(0), true => Some(1)}, Some(1), x.country.as_str(), false).unwrap();
+    }
+    else {
+        isp.warnings += 1;
+        if !from_db && x.is_banned {isp.banned += 1;}
+        let _ = isp::insert_new_ISP(conn, isp.name.as_str(), Some(isp.banned), Some(isp.warnings), x.country.as_str(), isp.is_blocked).unwrap();
+    }
+    return MetaInfo { country, region, city, isp }
+}
+
+
+
+
+pub fn update_ip_db_on_new_log(conn: &Connection, x: ip::IP, from_db: bool) {
+    if !from_db {
+      let _ = ip::insert_new_IP(conn, 
+        x.ip.as_str(), x.created_at.as_str(), 
+        x.lon.as_str(), x.lat.as_str(), 
+        x.isp.as_str(), x.city.as_str(), 
+        Some(x.region.as_str()), x.country.as_str(),
+        Some(x.countrycode.as_str()), x.banned_times, 
+          x.is_banned, x.warnings).unwrap();
+    }
+    else {
+      // ip is in db
+      let _ = ip::insert_new_IP(conn,
+        x.ip.as_str(), x.created_at.as_str(), 
+        x.lon.as_str(), x.lat.as_str(), 
+        x.isp.as_str(), x.city.as_str(), 
+        Some(x.region.as_str()), x.country.as_str(),
+        Some(x.countrycode.as_str()), x.banned_times, 
+          x.is_banned, x.warnings + 1).unwrap();
+    }
+  }
+
 
 // Tests need to be run sequentially on non-existant db
 //#[cfg(test)]
 mod test {
-    use crate::migrations::schema;
-    use crate::migrations::schema::{message, isp, city, region, country, ip};
+    use crate::database::schema;
+    use crate::database::schema::{message, isp, city, region, country, ip};
     use rusqlite::{Connection, Result};
 
     fn cleanup_db(filename: &str) {

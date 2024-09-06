@@ -1,5 +1,5 @@
 use super::{SelectionMode, SortState, Stats, Action, StatAction, KeyBindings, KeyEvent, Config, get_first_key_simple, get_first_key_by_action};
-use crate::migrations::schema::{city::City, country::Country, ip::IP, isp::ISP, message::MiniMessage, region::Region};
+use crate::database::schema::{city::City, country::Country, ip::IP, isp::ISP, message::MiniMessage, region::Region};
 use crate::{gen_structs::StatefulList, themes::Theme, mode::Mode as AppMode};
 use chrono::{DateTime, Datelike, FixedOffset};
 use color_eyre::owo_colors::OwoColorize;

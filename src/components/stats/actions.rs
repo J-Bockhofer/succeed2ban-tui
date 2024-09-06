@@ -1,7 +1,7 @@
 //! Defines functions for Stats that happen on Key Events
 use color_eyre::eyre::Result;
 use tokio::sync::mpsc::UnboundedSender;
-use crate::{action::Action, migrations::schema::ip::IP};
+use crate::{action::Action, database::schema::ip::IP};
 use tokio::time::{self, Duration};
 use super::{Stats, enums::{SelectionMode, SortMode, SortState}};
 

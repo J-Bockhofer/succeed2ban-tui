@@ -15,7 +15,7 @@ pub mod geofetcher;
 pub mod gen_structs;
 pub mod themes;
 pub mod animations;
-pub mod migrations;
+pub mod database;
 pub mod action_handlers;
 
 use clap::Parser;

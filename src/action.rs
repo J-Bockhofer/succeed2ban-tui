@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{migrations::schema::{city::City, country::Country, ip::IP, isp::ISP, message::MiniMessage, region::Region}, tasks, themes::Themes};
+use crate::{database::schema::{city::City, country::Country, ip::IP, isp::ISP, message::MiniMessage, region::Region}, tasks, themes::Themes};
 use rusqlite::{Connection, Result};
 
 

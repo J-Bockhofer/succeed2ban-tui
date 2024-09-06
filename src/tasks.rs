@@ -31,6 +31,23 @@ pub enum IOMessage {
   MultiLine(Vec<String>, IOProducer),
 }
 
+impl IOMessage {
+  pub fn destructure(&self, sep: &str) -> (String, IOProducer) {
+    let prod: IOProducer;
+    let catmsg: String;
+    match self.clone() {
+      IOMessage::SingleLine(x, p) => {
+        prod = p;
+        catmsg = x},
+      IOMessage::MultiLine(vx, p) => {
+        prod = p;
+        catmsg = vx.join(sep)
+      },
+    }
+    return (catmsg, prod)
+  }
+}
+
 // pass another receiver for the cancellation token? // _cancellation_token: CancellationToken)
 pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>, rx: Receiver<Result<Event>>) -> Result<()> {
   let mut pos = std::fs::metadata(path)?.len();

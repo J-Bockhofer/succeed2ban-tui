@@ -28,8 +28,8 @@ use crate::{
   action::{Action, HomeAction},
   config::{Config, KeyBindings, get_first_key_by_action},
   geofetcher, gen_structs::StatefulList,
-  themes, animations, migrations::schema,
-  migrations::schema::ip::IP,
+  themes, animations, database::schema,
+  database::schema::ip::IP,
   action_handlers::list_actions,
   animations::Animation, components::home::ui::create_internal_logs,
 };
