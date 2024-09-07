@@ -86,7 +86,6 @@ impl App {
   pub async fn run(&mut self) -> Result<()> {
     let (action_tx, mut action_rx) = mpsc::unbounded_channel();
 
-    let mut jctl_sender: Option<mpsc::UnboundedSender<bool>>= Option::None;
 
     let mut tui = tui::Tui::new()?.tick_rate(self.tick_rate).frame_rate(self.frame_rate);
     // tui.mouse(true);
@@ -175,89 +174,17 @@ impl App {
               }
             })?;
           },
-          Action::StartupConnect => {
-             
-          },
-
           Action::StartF2BWatcher => {
             self.start_f2b_watcher(action_tx.clone()).await?;
-            },
-
+          },
           Action::StopF2BWatcher => {
             self.stop_f2b_watcher(action_tx.clone()).await?;
           },
           Action::StartJCtlWatcher => {
-            if jctl_sender.is_none() {
-
-              // create sender and receiver for cancellation:
-              let (cancel_tx, cancel_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
-              jctl_sender = Option::Some(cancel_tx);
-
-              self.jctl_cancellation_token.cancel();
-              tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // make sure we're wound down
-              let token = CancellationToken::new();
-
-              
-              let _f2b_cancellation_token = token.child_token();
-              self.jctl_cancellation_token = token;
-
-              // start the fail2ban watcher
-              let action_tx2 = action_tx.clone();
-              let action_tx3 = action_tx.clone();
-
-              let journalwatcher = tokio::spawn(async move  {
-                let _resp = tasks::monitor_journalctl( action_tx2, cancel_rx);
-                tokio::select! {
-                  _ = _f2b_cancellation_token.cancelled() => {
-                    todo!("Got dropped, so all should be fine");
-                  },
-                  _ = _resp => {
-                    todo!("Journalctl Watcher ended before it was cancelled, should not happen")
-                  },
-                }
-
-                  
-/*                   let _resp = tasks::monitor_journalctl( action_tx2, cancel_rx).await.unwrap_or_else(|err| {
-                    action_tx3.send(Action::Error(String::from("Bad Error!"))).unwrap();
-                  }); */
-                });
-              self.jctl_handle = Option::Some(journalwatcher);
-              let fetchmsg = format!(" ✔ STARTED journalctl watcher");
-              action_tx.clone().send(Action::InternalLog(fetchmsg)).expect("LOG: StartJCTLWatcher message failed to send");
-            }
+            self.start_jctl_watcher(&action_tx).await?;
           },
           Action::StopJCtlWatcher => {
-            if let Some(jctl_sender) = jctl_sender.take()  {
-              // should be more graceful
-              let handle = self.jctl_handle.take().unwrap();
-              self.jctl_cancellation_token.cancel();
-
-              jctl_sender.send(false).unwrap_or_else(|err| {
-                println!("Failed to send JCTL abort with Error: {}", err);
-              });
-              handle.abort();
-              
-              let mut counter = 0;
-              while !handle.is_finished() {
-                std::thread::sleep(std::time::Duration::from_millis(1));
-                counter += 1;
-                if counter > 50 {
-                  jctl_sender.send(false).unwrap_or_else(|err| {
-                    println!("Failed to send JCTL abort with Error: {}", err);
-                  });
-                  handle.abort();
-                }
-                if counter > 100 {
-                  log::error!("Failed to abort task in 100 milliseconds for unknown reason");
-                  break;
-                }
-              }
-              if self.jctl_cancellation_token.is_cancelled() {
-                let fetchmsg = format!(" ❌ STOPPED journalctl watcher");
-                action_tx.clone().send(Action::InternalLog(fetchmsg)).expect("LOG: StopJCTLWatcher message failed to send");
-              }
-            }
-
+            self.stop_jctl_watcher(&action_tx).await?;
           },
           _ => {},
         }

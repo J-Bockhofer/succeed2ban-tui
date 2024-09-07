@@ -15,8 +15,7 @@ Only made for myself to learn Rust, use at own discretion.
 
 Issues / Todos:
 
-1. Stopping of watchers does not work without Ctrl+C after shutdown !!!
-    Don't manually stop the watchers, as it may create a zombie process!
+1. Does not check for active ssh connections so you might ban yourself
 
 2. Actions need refactor badly
 
@@ -26,7 +25,6 @@ Issues / Todos:
 
 5. Bans are not correctly logged in the db
 
-6. Does not check for active ssh connections so you might ban yourself
 
 Works off the default fail2ban log path @ `/var/log/fail2ban.log`
 
@@ -35,13 +33,15 @@ But you can also set your own by including the configuration file from this repo
 
 ## Usage
 
-1. cargo run
+1. clone the repo
 
-2. Press `Tab` to skip Startup menu countdown.
+2. cargo run --release
 
-3. Start fail2ban and/or journalctl watcher
+3. Press `Tab` to skip Startup menu countdown.
 
-4. Watch
+4. Start fail2ban and/or journalctl watcher
+
+5. Watch
 
 Press `w` for displaying the help / hotkeys!
 

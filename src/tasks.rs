@@ -16,9 +16,9 @@ use crate::action::Action;
 
 use tokio::io::AsyncSeekExt;
 use tokio::io::AsyncReadExt;
+use tokio::process::Command;
 
-
-use std::process::{Command, Stdio, ChildStdout};
+use std::process::{Stdio, ChildStdout};
 use std::io::Read;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -202,7 +202,92 @@ pub async fn notify_change_2(path: &str, _event_tx:UnboundedSender<Action>, mut 
   }
 }
 
+pub async fn monitor_journalctl_cancel_token(event_tx:UnboundedSender<Action>, cancel_token: CancellationToken) -> Result<()> {
 
+  let (action_tx, mut action_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+  //let mut command = Command::new("tail");
+  //let argus = vec!["-n", "1", "-f", "~/Dev/RUST/journal.txt"];
+  
+  let argus = vec!["-n", "1", "-f", "-u", "ssh"];
+  let mut command = Command::new("journalctl");
+  command.args(argus).stdout(Stdio::piped());
+
+  let child_token = cancel_token.child_token();
+
+  //sender
+  let _joinhandle = tokio::spawn(async move {
+    log::info!("Start jctl sender");
+    // closure needs a sender to send to new string and a receiver to terminate the process
+    //let mut tick_interval = tokio::time::interval(tokio::time::Duration::from_nanos(1000));
+
+    if let Ok(mut child) = command.spawn() {
+        if let Some(mut out) = child.stdout.take() {
+          let mut pre_line: Vec<u8> = vec![];
+          let mut buf: [u8; 1] = [0; 1];
+            loop {            
+              
+
+              tokio::select! {
+                _ = child_token.cancelled() => {
+                  log::info!("Stopped jctl sender");
+                  break;
+                },
+                read_result = out.read(&mut buf) => {
+
+                  match read_result {
+                    Ok(0) => break, // End of file reached or no more output
+                    Ok(_) => {
+                        // Check if we encounter a newline character, if yes send chars
+                        if buf[0] == b'\n' || buf[0] == b'\r' {
+                            let line = String::from_utf8(pre_line.clone()).unwrap();
+                            action_tx.send(line).unwrap_or_else(|err| {
+                                log::error!("JournalCtl Error: {}", err);
+                            });
+                            pre_line.clear();
+                        } else {
+                            pre_line.push(buf[0]);
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Error reading stdout: {:?}", e);
+                        break;
+                    }
+                  }
+
+                }
+              }
+              //tick_interval.tick().await;   
+            }  
+        } else {
+
+        }
+    } else {
+      log::error!("Process failed to start");
+    }
+  });
+
+  // receiver
+  tokio::spawn(async move {
+    log::info!("Start jctl receiver");
+    loop {
+        tokio::select! {
+          _ = cancel_token.cancelled() => {
+            log::info!("Stopped jctl receiver");
+            break;
+          }
+          maybe_msg = action_rx.recv() => {
+            if let Some(msg) = maybe_msg {
+              if !msg.is_empty() {
+                event_tx.send(Action::IONotify(IOMessage::SingleLine(msg, IOProducer::Journal))).unwrap();
+              }
+            }
+          }
+        }
+    }
+  });
+
+  Ok(())
+}
 
 pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, mut cancel_rx:UnboundedReceiver<bool>) -> Result<()> {
 
@@ -211,7 +296,7 @@ pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, mut cancel_rx:
     let (_cancel_tx, mut _cancel_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
 
     let argus = vec!["-n", "1", "-f", "-u", "ssh"];
-    let mut command = Command::new("journalctl");
+    let mut command = std::process::Command::new("journalctl");
 
     let _joinhandle = tokio::spawn(async move {
   
@@ -294,7 +379,7 @@ pub async fn monitor_journalctl_2(event_tx:UnboundedSender<Action>, _cancellatio
 
 
   let argus = vec!["-n", "1", "-f", "-u", "ssh"];
-  let mut command = Command::new("journalctl");
+  let mut command = std::process::Command::new("journalctl");
 
   tokio::spawn(async move {
 
