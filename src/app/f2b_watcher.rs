@@ -40,8 +40,7 @@ impl App {
         // construct the listener
         let filewatcher = tokio::spawn(async move  {
             log::info!("Started f2b watcher");
-            let _ = tasks::notify_change_2(&path, action_tx2, arx, _f2b_cancellation_token).await;
-            //let _res = tasks::notify_change(&path, action_tx2, _rx);
+            let _ = tasks::monitor_ionotify_file(&path, action_tx2, arx, _f2b_cancellation_token).await;
             log::info!("Dropping f2b watcher");
             drop(watcher);
           });

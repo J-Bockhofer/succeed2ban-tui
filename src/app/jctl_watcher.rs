@@ -25,7 +25,7 @@ impl App {
         // start the fail2ban watcher
         let action_tx2 = action_tx.clone();
 
-        let _resp = tasks::monitor_journalctl_cancel_token( action_tx2, _jctl_cancellation_token).await?;
+        let _resp = tasks::monitor_journalctl( action_tx2, _jctl_cancellation_token).await?;
 
         //self.jctl_handle = Option::Some(journalwatcher);
         let fetchmsg = format!(" ✔ STARTED journalctl watcher");
