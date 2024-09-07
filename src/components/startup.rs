@@ -425,7 +425,7 @@ impl Component for Startup <'_> {
         let country = country::select_country(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as blocked
         let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings), true).unwrap();
-        let fetchmsg = format!(" {} Blocked Country: {}", self.apptheme.symbol_block, &x.name);
+        let fetchmsg = format!(" {} Blocked Country: {}", self.apptheme.symbols.block, &x.name);
         tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Block Country message failed to send");
       },
       Action::StatsUnblockCountry(x) => {
@@ -434,7 +434,7 @@ impl Component for Startup <'_> {
         let country = country::select_country(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as unblocked
         let _ = country::insert_new_country(conn, country.name.as_str(), Some(country.code.as_str()),Some(country.banned), Some(country.warnings), false).unwrap();
-        let fetchmsg = format!(" {} Unblocked Country: {}", self.apptheme.symbol_unblock, &x.name);
+        let fetchmsg = format!(" {} Unblocked Country: {}", self.apptheme.symbols.unblock, &x.name);
         tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unblock Country message failed to send");
       },      
       Action::StatsBlockRegion(x) => {
@@ -443,7 +443,7 @@ impl Component for Startup <'_> {
         let region = region::select_region(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as blocked
         let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings), true).unwrap();
-        let fetchmsg = format!(" {} Blocked Region: {}", self.apptheme.symbol_block, &x.name);
+        let fetchmsg = format!(" {} Blocked Region: {}", self.apptheme.symbols.block, &x.name);
         tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Block Region message failed to send");
       },
       Action::StatsUnblockRegion(x) => {
@@ -452,7 +452,7 @@ impl Component for Startup <'_> {
         let region = region::select_region(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as unblocked
         let _ = region::insert_new_region(conn, region.name.as_str(), region.country.as_str(),Some(region.banned), Some(region.warnings), false).unwrap();
-        let fetchmsg = format!(" {} Unblocked Region: {}", self.apptheme.symbol_unblock, &x.name);
+        let fetchmsg = format!(" {} Unblocked Region: {}", self.apptheme.symbols.unblock, &x.name);
         tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unblock Region message failed to send");
       }, 
       Action::StatsBlockCity(x) => {
@@ -461,7 +461,7 @@ impl Component for Startup <'_> {
         let city = city::select_city(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as blocked
         let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(), city.region.as_str(),Some(city.banned), Some(city.warnings), true).unwrap();
-        let fetchmsg = format!(" {} Blocked City: {}", self.apptheme.symbol_block, &x.name);
+        let fetchmsg = format!(" {} Blocked City: {}", self.apptheme.symbols.block, &x.name);
         tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Block City message failed to send");
       },
       Action::StatsUnblockCity(x) => {
@@ -470,7 +470,7 @@ impl Component for Startup <'_> {
         let city = city::select_city(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as unblocked
         let _ = city::insert_new_city(conn, city.name.as_str(), city.country.as_str(), city.region.as_str(),Some(city.banned), Some(city.warnings), false).unwrap();
-        let fetchmsg = format!(" {} Unblocked City: {}", self.apptheme.symbol_unblock, &x.name);
+        let fetchmsg = format!(" {} Unblocked City: {}", self.apptheme.symbols.unblock, &x.name);
         tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unblock City message failed to send");
       },    
       Action::StatsBlockISP(x) => {
@@ -479,7 +479,7 @@ impl Component for Startup <'_> {
         let isp = isp::select_isp(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as blocked
         let _ = isp::insert_new_ISP(conn, isp.name.as_str(),Some(isp.banned), Some(isp.warnings),isp.country.as_str(), true).unwrap();
-        let fetchmsg = format!(" {} Blocked ISP: {}", self.apptheme.symbol_unblock, &x.name);
+        let fetchmsg = format!(" {} Blocked ISP: {}", self.apptheme.symbols.unblock, &x.name);
         tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Block ISP message failed to send");
       },
       Action::StatsUnblockISP(x) => {
@@ -488,7 +488,7 @@ impl Component for Startup <'_> {
         let isp = isp::select_isp(conn, x.name.as_str()).unwrap_or_default().unwrap_or_default();
         // insert new as unblocked
         let _ = isp::insert_new_ISP(conn, isp.name.as_str(), Some(isp.banned), Some(isp.warnings),isp.country.as_str(), false).unwrap();
-        let fetchmsg = format!(" {} Unblocked ISP: {}", self.apptheme.symbol_unblock, &x.name);
+        let fetchmsg = format!(" {} Unblocked ISP: {}", self.apptheme.symbols.unblock, &x.name);
         tx.send(Action::InternalLog(fetchmsg)).expect("LOG: Unblock ISP message failed to send");
       }, 
       Action::StatsGetIP(x) => {
@@ -502,8 +502,8 @@ impl Component for Startup <'_> {
 
       Action::BanIP(x) => {
         let cip = x.clone();
-        let symb = self.apptheme.symbol_ban.clone();
-        let _symb = self.apptheme.symbol_ban.clone();
+        let symb = self.apptheme.symbols.ban.clone();
+        let _symb = self.apptheme.symbols.ban.clone();
         if !x.is_banned {
 
           let besure = self.f2b_check_banned(&x.ip);
@@ -534,7 +534,7 @@ impl Component for Startup <'_> {
         }
         if besure {
           let tx = self.action_tx.clone().unwrap();
-          let symb = self.apptheme.symbol_unblock.clone();
+          let symb = self.apptheme.symbols.unblock.clone();
           f2b_actions::send_unban(x.clone(), symb, tx);
         } else {
           let blockmsg = format!(" ! IP is not banned {}", &cip.ip);

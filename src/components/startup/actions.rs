@@ -77,11 +77,11 @@ impl <'a> Startup <'a> {
       let is_ban  = catmsg.contains("Ban");
       let tx = self.action_tx.clone().unwrap();
       tx.send(Action::PassGeo(x.clone(), iomsg.clone(), from_db)).expect("PassGeo failed to send");
-      let symb = if from_db {self.apptheme.symbol_db.clone()} else {self.apptheme.symbol_reqwest.clone()};
+      let symb = if from_db {self.apptheme.symbols.database.clone()} else {self.apptheme.symbols.request.clone()};
       let fetchmsg = format!(" {} Got location for IP {} ", symb, x.ip);
       tx.send(Action::InternalLog(fetchmsg)).expect("Fetchlog message failed to send");
 
-      geo_block_and_log(x.clone(), is_ban, meta, tx.clone(), self.apptheme.symbol_block.clone());
+      geo_block_and_log(x.clone(), is_ban, meta, tx.clone(), self.apptheme.symbols.block.clone());
 
       let timestamp = chrono::offset::Local::now().to_rfc3339();
       match iomsg {

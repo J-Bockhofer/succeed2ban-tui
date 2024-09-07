@@ -243,6 +243,46 @@ impl AppStyles {
 }
 
 
+/* 
+symbol_db: String::from("¤"), // 💽 💾 ⏫ ⌂
+symbol_reqwest: String::from("┬"), // 🗺  🌍 ⏬ ❓ ❎ 
+symbol_block: String::from("✋"), // 👊 // 👏  👌 👂 ⛩ 👓 📈  🔛 🔃
+symbol_error: String::from("⚠️"), // ⚠️ 👨‍🔧 🤖  
+symbol_unblock: String::from("🔛"),
+symbol_ban: String::from("✋"), 
+*/
+
+#[derive(Clone)]
+pub struct AppSymbols {
+    pub database: String,
+    pub request: String,
+    pub block: String,
+    pub unblock: String,
+    pub ban: String,
+    pub error: String,
+}
+
+
+impl Default for AppSymbols {
+    fn default() -> Self {
+        return AppSymbols {
+            database: String::from("¤"), // 💽 💾 ⏫ ⌂
+            request: String::from("┬"), // 🗺  🌍 ⏬ ❓ ❎ ,
+            block: String::from("✋"), // 👊 // 👏  👌 👂 ⛩ 👓 📈  🔛 🔃,
+            unblock: String::from("🔛"),
+            ban: String::from("✋"),
+            error: String::from("⚠️"), // ⚠️ 👨‍🔧 🤖  ,
+        }
+    }
+}
+
+impl AppSymbols {
+    pub fn from_inputs(database: String, request: String, block: String, unblock: String, ban: String, error: String) -> Self{
+        return AppSymbols { database, request, block, unblock, ban, error }
+    }
+}
+
+
 #[derive(Clone)]
 pub struct Theme {
     pub is_light: bool,
@@ -261,13 +301,7 @@ pub struct Theme {
     pub decay_time: tokio::time::Duration,
 
     // Symbols
-    pub symbol_db: String,
-    pub symbol_reqwest: String,
-    pub symbol_block: String,
-    pub symbol_error: String,
-    pub symbol_unblock: String,
-    pub symbol_ban: String,
-    
+    pub symbols: AppSymbols,    
 } 
 
 impl Default for Theme {
@@ -294,21 +328,23 @@ impl Default for Theme {
             ]},
             ipregex: Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(),
             decay_time: tokio::time::Duration::from_secs(10),
-            symbol_db: String::from("¤"), // 💽 💾 ⏫ ⌂
-            symbol_reqwest: String::from("┬"), // 🗺  🌍 ⏬ ❓ ❎ 
-            symbol_block: String::from("✋"), // 👊 // 👏  👌 👂 ⛩ 👓 📈  🔛 🔃
-            symbol_error: String::from("⚠️"), // ⚠️ 👨‍🔧 🤖  
-            symbol_unblock: String::from("🔛"),
-            symbol_ban: String::from("✋"),
+            symbols: AppSymbols::default(),
 
             colors_app: colors,
             styles_app: styles,
 
          }      
     }
+
 }
 
 impl Theme {
+    pub fn with_symbols(&self, symbols: AppSymbols) -> Self {
+        let mut new_theme = self.clone();
+        new_theme.symbols = symbols;
+        new_theme
+    }
+
     pub fn paper() -> Self {
         let colors = AppColors::paper();
         let styles = AppStyles::paper();
@@ -331,12 +367,7 @@ impl Theme {
             ]},
             ipregex: Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(),
             decay_time: tokio::time::Duration::from_secs(10),
-            symbol_db: String::from("¤"), // 💽 💾 ⏫ ⌂
-            symbol_reqwest: String::from("┬"), // 🗺  🌍 ⏬ ❓ ❎ 
-            symbol_block: String::from("✋"), // 👊 // 👏  👌 👂 ⛩ 👓 📈  🔛 🔃
-            symbol_error: String::from("⚠️"), // ⚠️ 👨‍🔧 🤖  
-            symbol_unblock: String::from("🔛"),
-            symbol_ban: String::from("✋"),
+            symbols: AppSymbols::default(),
 
             colors_app: colors,
             styles_app: styles,
