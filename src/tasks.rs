@@ -1,10 +1,8 @@
 use std::io::{Seek, BufReader, BufRead};
 use notify::{Watcher, RecursiveMode, Result, RecommendedWatcher, Config, Event};
 use serde::Serialize;
-//use std::sync::mpsc::Receiver;
-
+use tokio::time::{interval, Duration};
 use tokio::{
-  
     sync::mpsc::UnboundedSender,
     sync::mpsc::UnboundedReceiver,
     sync::mpsc::Receiver,
@@ -103,11 +101,6 @@ pub async fn monitor_ionotify_file(path: &str, _event_tx:UnboundedSender<Action>
                 };
                 _event_tx.send(Action::IONotify(msg)).unwrap();
 
-                //let addedlines = msgs.join("++++");
-                //println!("> {}", addedlines);
-                //log::info!("Added potential multiline string");
-                //tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-                //_event_tx.send(Action::IONotify(addedlines)).unwrap();
             }
             Err(error) => { log::error!("Logwatcher failed with: {error:?}"); return Err(error)},
           }
@@ -117,9 +110,11 @@ pub async fn monitor_ionotify_file(path: &str, _event_tx:UnboundedSender<Action>
   }
 }
 
-pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, cancel_token: CancellationToken) -> Result<()> {
+/// Creates a sender and receiver process for reading journalctl's stdout. This function justs sets them up and returns immediately.
+pub async fn monitor_journalctl(action_tx:UnboundedSender<Action>, cancel_token: CancellationToken) -> Result<()> {
 
-  let (action_tx, mut action_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+
+  let (stdout_tx, mut stdout_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
   //let mut command = Command::new("tail");
   //let argus = vec!["-n", "1", "-f", "~/Dev/RUST/journal.txt"];
   
@@ -128,15 +123,14 @@ pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, cancel_token: 
   command.args(argus).stdout(Stdio::piped());
 
   let child_token = cancel_token.child_token();
-
+  
   //sender
   let _joinhandle = tokio::spawn(async move {
     log::info!("Start jctl sender");
-    // closure needs a sender to send to new string and a receiver to terminate the process
-    //let mut tick_interval = tokio::time::interval(tokio::time::Duration::from_nanos(1000));
-
+    let mut tick_interval = interval(Duration::from_nanos(10));
     if let Ok(mut child) = command.spawn() {
         if let Some(mut out) = child.stdout.take() {
+          
           let mut pre_line: Vec<u8> = vec![];
           let mut buf: [u8; 1] = [0; 1];
             loop {            
@@ -155,7 +149,7 @@ pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, cancel_token: 
                         // Check if we encounter a newline character, if yes send chars
                         if buf[0] == b'\n' || buf[0] == b'\r' {
                             let line = String::from_utf8(pre_line.clone()).unwrap();
-                            action_tx.send(line).unwrap_or_else(|err| {
+                            stdout_tx.send(line).unwrap_or_else(|err| {
                                 log::error!("JournalCtl Error: {}", err);
                             });
                             pre_line.clear();
@@ -171,7 +165,7 @@ pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, cancel_token: 
 
                 }
               }
-              //tick_interval.tick().await;   
+              tick_interval.tick().await;
             }  
         } else {
 
@@ -190,10 +184,10 @@ pub async fn monitor_journalctl(event_tx:UnboundedSender<Action>, cancel_token: 
             log::info!("Stopped jctl receiver");
             break;
           }
-          maybe_msg = action_rx.recv() => {
+          maybe_msg = stdout_rx.recv() => {
             if let Some(msg) = maybe_msg {
               if !msg.is_empty() {
-                event_tx.send(Action::IONotify(IOMessage::SingleLine(msg, IOProducer::Journal))).unwrap();
+                action_tx.send(Action::IONotify(IOMessage::SingleLine(msg, IOProducer::Journal))).unwrap();
               }
             }
           }

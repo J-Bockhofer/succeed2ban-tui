@@ -15,6 +15,7 @@ use std::sync::OnceLock;
 use std::{collections::HashMap, time::Duration};
 
 use color_eyre::eyre::Result;
+use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::{KeyCode, KeyEvent};
 use lazy_static::__Deref;
 use log::error;
@@ -557,7 +558,7 @@ impl Component for Startup <'_> {
 
             let canvas = canvas::Canvas::default()
             .background_color(self.apptheme.colors_app.background_mid.color)
-            .block(Block::default().borders(Borders::ALL).title("").bg(self.apptheme.colors_app.background_mid.color))
+            .block(Block::default().borders(Borders::ALL).border_style(self.apptheme.styles_app.border_style).title("").bg(self.apptheme.colors_app.background_mid.color))
             .marker(Marker::Braille)
             .paint( |ctx| {
    

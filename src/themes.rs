@@ -188,6 +188,27 @@ impl AppColors {
             background_text_dark: ColorRGB::new(12,12,12),
         }
     }
+
+    pub fn classic() -> Self{
+        AppColors { 
+            background_darkest: ColorRGB::from_color(Color::Rgb(0, 0, 0)).unwrap(), 
+            background_mid: ColorRGB::from_color(Color::Rgb(0, 0, 0)).unwrap(),  
+            background_brightest: ColorRGB::from_color(Color::Rgb(48, 48, 48)).unwrap(), 
+            text_color: ColorRGB::from_color(colors::ACCENT_LIME).unwrap(), 
+            border_color: ColorRGB::from_color(Color::Rgb(55, 155, 55)).unwrap(), 
+            map_color: ColorRGB::from_color(Color::Rgb(88,198,88)).unwrap(), 
+            warn_color: ColorRGB::from_color(colors::ACCENT_LORANGE).unwrap(), 
+            error_color: ColorRGB::from_color(Color::Rgb(127, 0, 0)).unwrap(),
+            confirm_color: ColorRGB::from_color(colors::ACCENT_LIME).unwrap(), 
+            accent_color_a: ColorRGB::from_color(colors::ACCENT_LIME).unwrap(), 
+            accent_color_a_var: ColorRGB::from_color(colors::ACCENT_LIME).unwrap(), 
+            accent_color_b_dark: ColorRGB::from_color(Color::Rgb(0,85,0)).unwrap(), 
+            accent_color_b_mid: ColorRGB::from_color(Color::Rgb(144,227,144)).unwrap(), 
+            accent_color_b_bright: ColorRGB::from_color(colors::ACCENT_LIME).unwrap(), 
+            background_text_bright: ColorRGB::from_color(Color::Rgb(48, 48, 48)).unwrap(),
+            background_text_dark: ColorRGB::from_color(colors::EMPTY).unwrap(),
+        }
+    }
 }
 
 
@@ -240,17 +261,26 @@ impl AppStyles {
             .bg(default_colors.background_mid.color),}        
     }
 
+    pub fn classic() -> Self {
+        let default_colors = AppColors::classic(); 
+
+        AppStyles { 
+          border_style: Style::new()
+            .bg(default_colors.background_darkest.color)
+            .fg(default_colors.border_color.color), 
+          active_border_style: Style::new()
+            .bg(default_colors.background_darkest.color)
+            .fg(default_colors.accent_color_a.color),
+          highlight_item_style: Style::new()
+            .fg(default_colors.background_text_dark.color)
+            .bg(default_colors.accent_color_b_mid.color)
+            .add_modifier(Modifier::BOLD),
+          default_style: Style::new()
+            .fg(default_colors.text_color.color)
+            .bg(default_colors.background_mid.color),}        
+    }
+
 }
-
-
-/* 
-symbol_db: String::from("¤"), // 💽 💾 ⏫ ⌂
-symbol_reqwest: String::from("┬"), // 🗺  🌍 ⏬ ❓ ❎ 
-symbol_block: String::from("✋"), // 👊 // 👏  👌 👂 ⛩ 👓 📈  🔛 🔃
-symbol_error: String::from("⚠️"), // ⚠️ 👨‍🔧 🤖  
-symbol_unblock: String::from("🔛"),
-symbol_ban: String::from("✋"), 
-*/
 
 #[derive(Clone)]
 pub struct AppSymbols {
@@ -371,10 +401,36 @@ impl Theme {
 
             colors_app: colors,
             styles_app: styles,
-
          }              
+    }
 
+    pub fn classic() -> Self {
+        let colors = AppColors::classic();
+        let styles = AppStyles::classic();
+        Theme {is_light:false, word_style_map: 
+          WordStyleMap{ word_styles: vec![
+                    WordStylePair::new(String::from("Found"), Style::default().fg(colors.accent_color_a.color)),
+                    WordStylePair::new(String::from("Ban"), Style::default().fg(colors.accent_color_a.color)),
+                    WordStylePair::new(String::from("INFO"), Style::default().fg(colors.confirm_color.color)),
+                    WordStylePair::new(String::from("WARNING"), Style::default().fg(colors.warn_color.color)),
+                    WordStylePair::new(String::from("NOTICE"), Style::default().fg(colors.text_color.color)),
+                    WordStylePair::new(String::from("user"), Style::default().fg(colors.accent_color_b_bright.color)),
+                    WordStylePair::new(String::from("fatal:"), Style::default().fg(colors.accent_color_a.color)),
+                    WordStylePair::new(String::from("Accepted"), Style::default().fg(colors.confirm_color.color)),
+                ]
+            }, 
+            regex_style_map: 
+            RegexStyleMap{ regex_styles: vec![
+                RegexStylePair::new(Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(), Style::default().fg(colors.accent_color_a.color)), // IP v4
+                RegexStylePair::new(Regex::new(r"(\d{2}:\d{2}:\d{2})").unwrap(), Style::default().fg(colors.accent_color_a.color)), // Timestamp HH:MM:SS
+            ]},
+            ipregex: Regex::new(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap(),
+            decay_time: tokio::time::Duration::from_secs(10),
+            symbols: AppSymbols::default(),
 
+            colors_app: colors,
+            styles_app: styles,
+        }         
     }
 
 }
@@ -401,6 +457,7 @@ impl Default for Themes {
         Themes { theme_collection: vec![
             ThemeContainer::new("Dark".to_string(), Theme::default()),
             ThemeContainer::new("Paper".to_string(), Theme::paper()),
+            ThemeContainer::new("Classic".to_string(), Theme::classic()),
         ] }
 
     }

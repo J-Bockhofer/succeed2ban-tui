@@ -589,7 +589,7 @@ impl Component for Stats {
             f.render_widget(ui::popup_un_block_selected(self, block_mode),p_area);
           },
           DisplayMode::Help => {
-            let p_area = centered_rect(f.size(), 35, 30);
+            let p_area = centered_rect(f.size(), 40, 40);
             f.render_widget(Clear, p_area);
             f.render_widget(ui::popup_help(&self.apptheme, self.config.clone()),p_area);
             },

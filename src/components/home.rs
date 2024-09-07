@@ -254,7 +254,7 @@ impl<'a> Home<'a> {
 
     canvas::Canvas::default()
         .background_color(self.apptheme.colors_app.background_mid.color)
-        .block(Block::default().borders(Borders::ALL).title("").bg(self.apptheme.colors_app.background_mid.color))
+        .block(Block::default().borders(Borders::ALL).border_style(self.apptheme.styles_app.border_style).title("").bg(self.apptheme.colors_app.background_mid.color))
         .marker(Marker::Braille)
         .paint(move |ctx| {
             // draw map
