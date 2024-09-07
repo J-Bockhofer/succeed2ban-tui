@@ -1,11 +1,13 @@
 use std::io::{Seek, BufReader, BufRead};
 use notify::{Watcher, RecursiveMode, Result, RecommendedWatcher, Config, Event};
 use serde::Serialize;
-use std::sync::mpsc::Receiver;
+//use std::sync::mpsc::Receiver;
 
 use tokio::{
+  
     sync::mpsc::UnboundedSender,
     sync::mpsc::UnboundedReceiver,
+    sync::mpsc::Receiver,
   };
 
 use tokio_util::sync::CancellationToken;
@@ -49,7 +51,7 @@ impl IOMessage {
 }
 
 // pass another receiver for the cancellation token? // _cancellation_token: CancellationToken)
-pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>, rx: Receiver<Result<Event>>) -> Result<()> {
+pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>, rx: std::sync::mpsc::Receiver<Result<Event>>) -> Result<()> {
   let mut pos = std::fs::metadata(path)?.len();
   let mut f = std::fs::File::open(path)?;
 /*     // get file
@@ -130,6 +132,74 @@ pub async fn notify_change(path: &str, _event_tx:UnboundedSender<Action>, rx: Re
     }
 
     Ok(())
+}
+
+
+pub async fn notify_change_2(path: &str, _event_tx:UnboundedSender<Action>, mut rx: Receiver<Result<Event>>, _cancellation_token: CancellationToken) -> Result<()> {
+  let mut pos = std::fs::metadata(path)?.len();
+  let mut f = std::fs::File::open(path)?;
+
+  loop {
+    tokio::select! {
+      _ = _cancellation_token.cancelled() => {
+        return Ok(())
+      }
+      _res = rx.recv() => {
+        if let Some(res) = _res {
+          match res {
+            Ok(_event) => {
+                // ignore any event that didn't change the pos
+                if f.metadata()?.len() == pos {
+                    continue;
+                }
+                if f.metadata()?.len() == 0 {
+                    continue;
+                }
+
+                // read from pos to end of file
+                f.seek(std::io::SeekFrom::Start(pos))?;
+
+                // update post to end of file
+                pos = f.metadata()?.len();
+                let reader = BufReader::new(&f);
+                let mut msgs = vec!["".to_string()];
+
+                for line in reader.lines() {
+                    let cline = line.unwrap();
+                    let nullchar = cline.chars().nth(cline.chars().count());
+                    if !nullchar.is_none()
+                    {
+                        let newchar = nullchar.unwrap();
+                        if newchar.is_whitespace()
+                        {
+                            pos -= 1;
+                        }
+
+                    }
+                    if !cline.is_empty() {
+                      msgs.push(cline.clone());                 
+                    }
+                }
+                
+                let msg = if msgs.len() == 1 {
+                  IOMessage::SingleLine(msgs[0].clone(), IOProducer::Log)
+                } else {
+                  IOMessage::MultiLine(msgs, IOProducer::Log)
+                };
+                _event_tx.send(Action::IONotify(msg)).unwrap();
+
+                //let addedlines = msgs.join("++++");
+                //println!("> {}", addedlines);
+                //log::info!("Added potential multiline string");
+                //tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                //_event_tx.send(Action::IONotify(addedlines)).unwrap();
+            }
+            Err(error) => { log::error!("Logwatcher failed with: {error:?}"); return Err(error)},
+          }
+        }
+      }
+    }
+  }
 }
 
 

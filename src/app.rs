@@ -1,7 +1,7 @@
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use futures::channel::mpsc::UnboundedSender;
-use notify::{INotifyWatcher, RecommendedWatcher, Watcher};
+use notify::{Event, INotifyWatcher, RecommendedWatcher, Watcher};
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -197,26 +197,19 @@ impl App {
               let path = if self.config.logpath.is_empty() {self.f2b_logpath.clone()} else {self.config.logpath.clone()};
               log::info!("{}", path);
               // set up watcher, sends events to the receiver.
-              let (_tx, _rx) = std::sync::mpsc::channel();
-              let mut watcher: notify::INotifyWatcher = notify::RecommendedWatcher::new(_tx, notify::Config::default())?;
+              //let (_tx, _rx) = std::sync::mpsc::channel();
+              let (atx, arx) = tokio::sync::mpsc::channel(100);
+              let mut watcher: notify::INotifyWatcher = notify::RecommendedWatcher::new(move |result: std::result::Result<Event, notify::Error>| {
+                atx.blocking_send(result).expect("Failed to send event");
+              }, notify::Config::default())?;
               watcher.watch(path.as_ref(), notify::RecursiveMode::NonRecursive)?;
 
               let filewatcher = tokio::spawn(async move  {
-                let _res = tasks::notify_change(&path, action_tx2, _rx);
-                log::info!("Started f2b watcher");
-                  tokio::select! {
-                    _ = _f2b_cancellation_token.cancelled() => {
-                      drop(watcher);
-                      //_res.abort();
-                      todo!("Got dropped, so all should be fine");
-                      //return;
-                    }
-                    _ = _res => {
-
-                      todo!("Notify Change ended before it was cancelled, should not happen")
-                    }
-                  }
-
+                  log::info!("Started f2b watcher");
+                  let _ = tasks::notify_change_2(&path, action_tx2, arx, _f2b_cancellation_token).await;
+                  //let _res = tasks::notify_change(&path, action_tx2, _rx);
+                  log::info!("Dropping f2b watcher");
+                  drop(watcher);
                 });
 
                 let fetchmsg = format!(" ✔ STARTED fail2ban watcher");
@@ -233,31 +226,11 @@ impl App {
               std::thread::sleep(std::time::Duration::from_millis(10));
               action_tx.clone().send(Action::StopF2BWatcher).unwrap();
             }
-            log::info!("Stopped f2b watcher");
             
             let fetchmsg = format!(" ❌ STOPPED fail2ban watcher");
             action_tx.clone().send(Action::InternalLog(fetchmsg)).expect("LOG: StopF2BWatcher message failed to send");
- /*            if let Some(handle) = self.f2bw_handle.take()  {
-              // should be more graceful
-              
-              handle.abort();
 
-              let mut counter = 0;
-              while !handle.is_finished() {
-                std::thread::sleep(std::time::Duration::from_millis(1));
-                counter += 1;
-                if counter > 50 {
-                  handle.abort();
-                }
-                if counter > 100 {
-                  log::error!("Failed to abort task in 100 milliseconds for unknown reason");
-                  break;
-                }
-              }
-
-
-            } */
-
+            action_tx.clone().send(Action::StoppedF2BWatcher).expect("LOG: StoppedF2BWatcher message failed to send");
           },
           Action::StartJCtlWatcher => {
             if jctl_sender.is_none() {

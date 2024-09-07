@@ -144,6 +144,7 @@ pub enum Action {
 
   StartF2BWatcher,
   StopF2BWatcher,
+  StoppedF2BWatcher,
   StartJCtlWatcher,
   StopJCtlWatcher,
   StoppedJCtlWatcher,

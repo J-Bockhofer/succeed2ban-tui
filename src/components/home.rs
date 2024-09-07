@@ -857,6 +857,7 @@ impl Component for Home<'_> {
       Action::ActionsNext => {self.available_actions.next();},
       Action::ActionsPrevious => {self.available_actions.previous();},
       Action::StoppedJCtlWatcher => {self.jctlrunning = false;},
+      Action::StoppedF2BWatcher => {self.f2brunning = false}
       Action::IONotify(x) => {self.elapsed_notify += 1;},
 
       Action::InvalidQuery => {self.queryerror = String::from("Invalid Query!");},
