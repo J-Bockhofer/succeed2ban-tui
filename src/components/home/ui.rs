@@ -1,5 +1,5 @@
 use super::{themes::Theme, Home, Mode, StyledLine, IPListItem, PointData, IP, DrawMode, IOMode, Animation, Action, HomeAction, get_first_key_by_action};
-use crate::{gen_structs::StatefulList, mode::Mode as AppMode};
+use crate::{gen_structs::StatefulList, mode::Mode as AppMode, ui::{self, help}};
 use ratatui::{prelude::*, widgets::*};
 
 pub fn create_internal_logs<'a>(home: &'a Home) -> List<'a> {
@@ -241,7 +241,7 @@ pub fn create_action_list<'a>(available_actions:StatefulList<(&'a str, String)>,
 
 // POPUPS // ---------------------------------------------------------------- //
 
-pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
+pub fn create_help<'a>(home: &'a Home) -> help::HelpOptions {
   // make a layout in center of the screen, outside this function, pass area to this  
   let active_drawmode = match home.drawmode {
     DrawMode::All => {"All   "},
@@ -279,6 +279,66 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
   let key_unsel = get_first_key_by_action(keymap, Action::Home(HomeAction::LogsUnselect));
   let key_capac = get_first_key_by_action(keymap, Action::Home(HomeAction::SetCapacity));
 
+  let help_categories = vec![
+      help::HelpOptCategory::default()
+      .with_name("General")
+      .with_opts(
+        vec![
+          help::HelpOpt::new_opt("Arrowkeys", "Select", "Select item in IPs or Actions dependent on mode"),
+          help::HelpOpt::new_opt("Tab", "Mode", "Switch Mode between IP-List & Actions"),
+          help::HelpOpt::new_opt(key_help.as_str(), "Help", "Toggle help"),
+          help::HelpOpt::new_opt(key_query.as_str(), "Query", "Toggle query input for IP data from db"),
+          help::HelpOpt::new_opt(key_ban.as_str(), "Ban", "Ban entered IP"),
+          help::HelpOpt::new_opt(key_unban.as_str(), "Unban", "Unban entered IP"),
+          help::HelpOpt::new_opt(key_stats.as_str(), "Stats", "Switch to Stats-Screen"), 
+          help::HelpOpt::new_opt(key_logs.as_str(), "Logs", "Maximizes Logs"),
+          help::HelpOpt::new_opt(key_map.as_str(), "Map", "Maximizes Map"),
+          help::HelpOpt::new_opt(key_clear.as_str(), "Clear", "Clears IP and I/O Lists"),
+          help::HelpOpt::new_opt("Enter", "Execute", "Context dependent selection or execution"), 
+        ]
+      ),
+      help::HelpOptCategory::default()
+      .with_name("Drawmode")
+      .with_state(active_drawmode)
+      .with_opts(
+        vec![
+          help::HelpOpt::new_opt(key_draw_all.as_str(), "All", "Draws all connections all the time"),
+          help::HelpOpt::new_opt(key_draw_sticky.as_str(), "Sticky", "Draws only the selected connection"),
+          help::HelpOpt::new_opt(key_draw_decay.as_str(), "Decay", "Draws each connection for 10 seconds"),
+        ]
+      ),
+      help::HelpOptCategory::default()
+      .with_name("I/O-Stream")
+      .with_state_descriptor("Capacity")
+      .with_state(home.iostreamed_capacity)
+      .with_opts(
+        vec![
+          help::HelpOpt::new_opt(key_first.as_str(), "First", "Select oldest line"),
+          help::HelpOpt::new_opt(key_prev.as_str(), "Previous", "Select previous"),
+          help::HelpOpt::new_opt(key_next.as_str(), "Next", "Select next line"),
+          help::HelpOpt::new_opt(key_last.as_str(), "Last", "Select latest line"),
+          help::HelpOpt::new_opt(key_unsel.as_str(), "Unselect", "Reset line selection"),
+          help::HelpOpt::new_opt(key_capac.as_str(), "Set Capacity", "Input a new capacity"),
+        ]
+      ),
+      help::HelpOptCategory::default()
+      .with_name("IO-Mode")
+      .with_state(active_iomode)
+      .with_opts(
+        vec![
+          help::HelpOpt::new_opt(key_follow.as_str(), "Follow", "Auto-selects the last received IP"),
+          help::HelpOpt::new_opt(key_static.as_str(), "Static", "Selection stays where you left it"),
+        ]
+      ),
+    ];
+
+  help::HelpOptions::from_categories(help_categories)
+
+}
+
+
+pub fn create_help_popup<'a>(home: &'a Home, help: help::HelpOptions) -> impl Widget + 'a {
+  //let help = create_help(home);
 
   let headerstyle = Style::default().fg(home.apptheme.colors_app.text_color.color).bg(home.apptheme.colors_app.background_text_bright.color);
   let linestyle = Style::default().fg(home.apptheme.colors_app.text_color.color);
@@ -289,43 +349,13 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
     linestyle_alt = Style::default().fg(home.apptheme.colors_app.text_color.color).bg(home.apptheme.colors_app.background_mid.color);
   }
   
-  // make text
-  let mut helptext: Vec<Line> = vec![];
-  helptext.push(                Line::from(Span::styled(format!("Key:          Name          Info"), linestyle)));
-  let mut hheader =   Line::from(                     format!("---           General       ---                                                                      -"));
-  hheader.patch_style(headerstyle);
-  helptext.push(hheader);    
-  helptext.push(                Line::from(Span::styled(format!("Arrowkeys:    Select        Select item in IPs or Actions dependent on mode"), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!("Tab:          Mode          Switch Mode between IP-List & Actions"), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Help          Toggle help", key_help), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Query         Toggle query input for IP data from db", key_query), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Ban           Ban entered IP", key_ban), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Unban         Unban entered IP", key_unban), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Stats         Switch to Stats-Screen", key_stats), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Logs          Maximizes Logs", key_logs), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Map           Maximizes Map", key_map), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Clear         Clears IP and I/O Lists", key_clear), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!("Enter:        Execute       Context dependent selection or execution"), linestyle)));
-  let mut hheader =   Line::from(                     format!("---           Drawmode      ---                                           {}                         -", active_drawmode)); // for more spaces bc inserted string has six characters
-  hheader.patch_style(headerstyle);
-  helptext.push(hheader);
-  helptext.push(                Line::from(Span::styled(format!(" {} :          All           Draws all connections all the time", key_draw_all), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Sticky        Draws only the selected connection", key_draw_sticky), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Decay         Draws each connection for 10 seconds", key_draw_decay), linestyle)));
-  let mut ioheader =  Line::from(                     format!("---           I/O Stream    ---                                 Capacity: {}                         -", home.iostreamed_capacity));
-  ioheader.patch_style(headerstyle);
-  helptext.push(ioheader);
-  helptext.push(                Line::from(Span::styled(format!(" {} :          First         Select oldest line", key_first), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Previous      Select previous", key_prev), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Next          Select next line", key_next), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Last          Select latest line", key_last), linestyle_alt)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Unselect      Reset line selection", key_unsel), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Set Capacity  Input a new capacity", key_capac), linestyle_alt)));
-  let mut hheader =   Line::from(                     format!("---           IO-Mode       ---                                           {}                         -", active_iomode)); // four more spaces bc inserted string has six characters
-  hheader.patch_style(headerstyle);
-  helptext.push(hheader);
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Follow        Auto-selects the last received IP", key_follow), linestyle)));
-  helptext.push(                Line::from(Span::styled(format!(" {} :          Static        Selection stays where you left it", key_static), linestyle_alt)));   
+  let styles = ui::help::HelpStyles{
+    header: headerstyle,
+    opt: linestyle,
+    opt_alt: linestyle_alt,
+  };
+
+  let helptext = help.make_lines(styles);
 
   let infoblock = Paragraph::new(helptext)
   .set_style(Style::default())
@@ -338,6 +368,8 @@ pub fn create_help_popup<'a>(home: &'a Home) -> impl Widget + 'a {
   infoblock
 
 }
+
+
 
 pub fn create_query_popup<'a>(home: &'a Home)-> impl Widget + 'a {
 

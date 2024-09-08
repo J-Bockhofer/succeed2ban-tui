@@ -17,6 +17,7 @@ pub mod themes;
 pub mod animations;
 pub mod database;
 pub mod action_handlers;
+pub mod ui;
 
 use clap::Parser;
 use cli::Cli;

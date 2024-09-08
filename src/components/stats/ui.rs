@@ -1,5 +1,6 @@
 use super::{SelectionMode, SortState, Stats, Action, StatAction, KeyBindings, KeyEvent, Config, get_first_key_simple, get_first_key_by_action};
 use crate::database::schema::{city::City, country::Country, ip::IP, isp::ISP, message::MiniMessage, region::Region};
+use crate::ui::help;
 use crate::{gen_structs::StatefulList, themes::Theme, mode::Mode as AppMode};
 use chrono::{DateTime, Datelike, FixedOffset};
 use color_eyre::owo_colors::OwoColorize;
@@ -514,12 +515,12 @@ pub fn make_ip_overview(theme: &Theme, sel_ip: IP) -> impl Widget + '_ {
 
 // POPUPS // ---------------------------------------------------------------- //
 
-pub fn popup_help(theme: &Theme, config: Config) -> impl Widget + '_ {
-  // make a layout in center of the screen, outside this function, pass area to this
-  //keymap.get(k) , keymap: HashMap<KeyEvent, Action>
+pub fn create_help(config: Config) -> help::HelpOptions {
+  // make a layout in center of the screen, outside this function, pass area to this  
+
   let keymap = config.keybindings.0.get(&AppMode::Stats).unwrap();
-  let helpkey = get_first_key_by_action(keymap, Action::Help);
-  //let helpkey = get_first_key_simple(&keymap, Action::Help);
+  let key_help = get_first_key_by_action(keymap, Action::Help);
+
   // General
   let key_exit = get_first_key_by_action(keymap, Action::Stats(StatAction::ExitStats));
   let key_block = get_first_key_by_action(keymap, Action::Stats(StatAction::Block));
@@ -533,6 +534,46 @@ pub fn popup_help(theme: &Theme, config: Config) -> impl Widget + '_ {
   let key_previous_timeframe = get_first_key_by_action(keymap, Action::Stats(StatAction::PreviousTimeframe));
   let key_next_timeframe = get_first_key_by_action(keymap, Action::Stats(StatAction::NextTimeframe));
 
+
+  let help_categories = vec![
+      help::HelpOptCategory::default()
+      .with_name("General")
+      .with_opts(
+        vec![
+          help::HelpOpt::new_opt("Arrowkeys", "Select", "Select item in List"),
+          help::HelpOpt::new_opt("BackTab", "Switch", "Switch selected List up"),
+          help::HelpOpt::new_opt("Tab", "Switch", "Switch selected List down"),
+          help::HelpOpt::new_opt(key_help.as_str(), "Help", "Toggle help"),
+          help::HelpOpt::new_opt("r", "Refresh", "Gets up-to-data for List from db"),
+          help::HelpOpt::new_opt(key_exit.as_str(), "Back", "Return to main screen"),
+          help::HelpOpt::new_opt(key_block.as_str(), "Block", "Blocks all IPs for selected"),
+          help::HelpOpt::new_opt(key_unblock.as_str(), "Unblock", "Lifts the Block for selected"), 
+        ]
+      ),
+      help::HelpOptCategory::default()
+      .with_name("Sorting")
+      .with_opts(
+        vec![
+          help::HelpOpt::new_opt(key_sort_alph.as_str(), "ABC", "Sorts selected List by Alpha-Numeric"),
+          help::HelpOpt::new_opt(key_sort_warn.as_str(), "Warn", "Sorts selected List by number of warnings"),
+          help::HelpOpt::new_opt(key_sort_block.as_str(), "Block", "Sorts selected List by blocked / unblocked"), 
+        ]
+      ),
+      help::HelpOptCategory::default()
+      .with_name("Charts")
+      .with_opts(
+        vec![
+          help::HelpOpt::new_opt(key_previous_timeframe.as_str(), "Previous", "Previous Timeframe"),
+          help::HelpOpt::new_opt(key_next_timeframe.as_str(), "Next", "Next Timeframe"),
+        ]
+      ),
+    ];
+  help::HelpOptions::from_categories(help_categories)
+
+}
+
+pub fn popup_help(theme: &Theme, help: help::HelpOptions) -> impl Widget + '_ {
+
   let headerstyle = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_text_bright.color);
   let linestyle = Style::default().fg(theme.colors_app.text_color.color);
   let linestyle_alt: Style;
@@ -541,35 +582,14 @@ pub fn popup_help(theme: &Theme, config: Config) -> impl Widget + '_ {
   } else {
     linestyle_alt = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_mid.color);
   }
-  // make text
-  let mut helptext: Vec<Line> = vec![];
-  helptext.push(Line::from(Span::styled(format!("Key:          Name          Info"), linestyle)));
-  let mut hheader = Line::from(format!("---           General       ---                                                                 -"
-  ));
-  hheader.patch_style(headerstyle);
-  helptext.push(hheader);
-  helptext.push(Line::from(Span::styled(format!("Arrowkeys:    Select        Select item in List"), linestyle)));
-  helptext.push(Line::from(Span::styled(format!("BackTab:      Switch        Switch selected List up"), linestyle_alt)));
-  helptext.push(Line::from(Span::styled(format!("Tab:          Switch        Switch selected List down"), linestyle)));
-  helptext.push(Line::from(Span::styled(format!(" {} :          Help          Toggle help", helpkey), linestyle_alt)));
-  helptext.push(Line::from(Span::styled(format!(" r :          Refresh       Gets up-to-data for List from db"), linestyle)));
-  helptext.push(Line::from(Span::styled(format!("                            (Country auto-fetches all)"), linestyle)));
-  helptext.push(Line::from(Span::styled(format!(" {} :          Back          Return to main screen", key_exit), linestyle_alt)));
-  helptext.push(Line::from(Span::styled(format!(" {} :          Block         Blocks all IPs for selected", key_block), linestyle)));
-  helptext.push(Line::from(Span::styled(format!(" {} :          Unblock       Lifts the Block for selected", key_unblock), linestyle_alt)));
-  let mut hheader = Line::from(format!("---           Sorting      ---                                                                 -"
-  ));
-  hheader.patch_style(headerstyle);
-  helptext.push(hheader);  
-  helptext.push(Line::from(Span::styled(format!(" {} :          ABC           Sorts selected List by Alpha-Numeric", key_sort_alph), linestyle)));
-  helptext.push(Line::from(Span::styled(format!(" {} :          Warn          Sorts selected List by number of warnings", key_sort_warn), linestyle_alt)));
-  helptext.push(Line::from(Span::styled(format!(" {} :          Block         Sorts selected List by blocked / unblocked", key_sort_block), linestyle)));
-  let mut hheader = Line::from(format!("---           Charts       ---                                                                 -"
-  ));
-  hheader.patch_style(headerstyle);
-  helptext.push(hheader);  
-  helptext.push(Line::from(Span::styled(format!(" {} :          Previous      Previous Timeframe", key_previous_timeframe), linestyle)));
-  helptext.push(Line::from(Span::styled(format!(" {} :          Next          Next Timeframe", key_next_timeframe), linestyle_alt)));
+  
+  let styles = help::HelpStyles{
+    header: headerstyle,
+    opt: linestyle,
+    opt_alt: linestyle_alt,
+  };
+
+  let helptext = help.make_lines(styles);
 
   let infoblock = Paragraph::new(helptext)
   .set_style(Style::default())

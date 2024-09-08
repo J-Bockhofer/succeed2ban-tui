@@ -2,6 +2,8 @@ pub mod ui;
 pub mod utils;
 use utils::{centered_rect, map_range};
 
+use crate::ui::centered_rect_inner_fixed;
+
 pub mod structs;
 use structs::{StyledLine, PointData, IPListItem};
 
@@ -1006,9 +1008,12 @@ impl Component for Home<'_> {
       // display popups/overlays
       match self.displaymode {
         DisplayMode::Help => {
-          let p_area = centered_rect(f.size(), 45, 55);
+          let help = ui::create_help(self);
+          let p_area = centered_rect_inner_fixed(f.size(), help.max_lengths.get_line_length().try_into().expect("help menu has too long descriptions"), help.get_num_lines().try_into().expect("help menu has too many options"));
+          //let p_area = centered_rect(f.size(), 45, 55);
           f.render_widget(Clear, p_area);
-          f.render_widget(ui::create_help_popup(self),p_area);
+          f.render_widget(ui::create_help_popup(self, help),p_area);
+          //f.render_widget(ui::create_help_popup(self),p_area);
           },
         DisplayMode::Query => {
           self.anim_querycursor.next();

@@ -25,6 +25,7 @@ use tui_input::{backend::crossterm::EventHandler, Input};
 use chrono::{self, Datelike};
 
 use super::{Component, Frame};
+use crate::ui::centered_rect_inner_fixed;
 use crate::{action::{Action, StatAction}, config::{Config, KeyBindings, get_first_key_simple, get_first_key_by_action}, components::home::utils::centered_rect};
 
 use crate::{database::schema::{city::City, region::Region, isp::ISP, country::Country, message::MiniMessage, ip::IP},
@@ -589,9 +590,11 @@ impl Component for Stats {
             f.render_widget(ui::popup_un_block_selected(self, block_mode),p_area);
           },
           DisplayMode::Help => {
-            let p_area = centered_rect(f.size(), 40, 40);
+            //let p_area = centered_rect(f.size(), 40, 40);
+            let help = ui::create_help(self.config.clone());
+            let p_area = centered_rect_inner_fixed(f.size(), help.max_lengths.get_line_length().try_into().expect("help menu has too long descriptions"), help.get_num_lines().try_into().expect("help menu has too many options"));
             f.render_widget(Clear, p_area);
-            f.render_widget(ui::popup_help(&self.apptheme, self.config.clone()),p_area);
+            f.render_widget(ui::popup_help(&self.apptheme, help),p_area);
             },
           _ => {}
         }
