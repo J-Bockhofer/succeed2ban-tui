@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-use crate::{action::Action, database::schema::{ip::{self, IP}, message}, tasks::{IOMessage, IOProducer}};
+use crate::{action::Action, database::schema::{ip::{self, IP}, message}, app::models::{IOMessage, IOProducer}};
 
 
 pub fn process_query(conn: &Connection, querystr: String, tx: tokio::sync::mpsc::UnboundedSender<Action>) {

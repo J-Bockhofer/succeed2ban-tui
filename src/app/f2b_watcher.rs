@@ -1,12 +1,21 @@
-use crate::{action::Action, tasks};
+use crate::action::Action;
 
 use super::App;
 
 use tokio_util::sync::CancellationToken;
 use color_eyre::eyre::Result;
 
-use notify::{Event, INotifyWatcher, RecommendedWatcher, Watcher};
-use tokio::sync::mpsc::UnboundedSender;
+use std::io::{Seek, BufReader, BufRead};
+use notify::{Watcher, RecursiveMode, RecommendedWatcher, Config, Event};
+use serde::Serialize;
+use tokio::time::{interval, Duration};
+use tokio::{
+    sync::mpsc::UnboundedSender,
+    sync::mpsc::UnboundedReceiver,
+    sync::mpsc::Receiver,
+  };
+
+use super::models::{IOMessage, IOProducer};
 
 impl App {
 
@@ -40,7 +49,7 @@ impl App {
         // construct the listener
         let filewatcher = tokio::spawn(async move  {
             log::info!("Started f2b watcher");
-            let _ = tasks::monitor_ionotify_file(&path, action_tx2, arx, _f2b_cancellation_token).await;
+            let _ = monitor_ionotify_file(&path, action_tx2, arx, _f2b_cancellation_token).await;
             log::info!("Dropping f2b watcher");
             drop(watcher);
           });
@@ -67,4 +76,68 @@ impl App {
         Ok(())
     }    
 
+}
+
+use notify::Result as NResult;
+
+pub async fn monitor_ionotify_file(path: &str, _event_tx:UnboundedSender<Action>, mut rx: Receiver<NResult<Event>>, _cancellation_token: CancellationToken) -> NResult<()> {
+  let mut pos = std::fs::metadata(path)?.len();
+  let mut f = std::fs::File::open(path)?;
+
+  loop {
+    tokio::select! {
+      _ = _cancellation_token.cancelled() => {
+        return Ok(())
+      }
+      _res = rx.recv() => {
+        if let Some(res) = _res {
+          match res {
+            Ok(_event) => {
+                // ignore any event that didn't change the pos
+                if f.metadata()?.len() == pos {
+                    continue;
+                }
+                if f.metadata()?.len() == 0 {
+                    continue;
+                }
+
+                // read from pos to end of file
+                f.seek(std::io::SeekFrom::Start(pos))?;
+
+                // update post to end of file
+                pos = f.metadata()?.len();
+                let reader = BufReader::new(&f);
+                let mut msgs = vec!["".to_string()];
+
+                for line in reader.lines() {
+                    let cline = line.unwrap();
+                    let nullchar = cline.chars().nth(cline.chars().count());
+                    if !nullchar.is_none()
+                    {
+                        let newchar = nullchar.unwrap();
+                        if newchar.is_whitespace()
+                        {
+                            pos -= 1;
+                        }
+
+                    }
+                    if !cline.is_empty() {
+                      msgs.push(cline.clone());                 
+                    }
+                }
+                
+                let msg = if msgs.len() == 1 {
+                  IOMessage::SingleLine(msgs[0].clone(), IOProducer::Log)
+                } else {
+                  IOMessage::MultiLine(msgs, IOProducer::Log)
+                };
+                _event_tx.send(Action::IONotify(msg)).unwrap();
+
+            }
+            Err(error) => { log::error!("Logwatcher failed with: {error:?}"); return Err(error)},
+          }
+        }
+      }
+    }
+  }
 }

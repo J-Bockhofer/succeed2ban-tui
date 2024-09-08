@@ -1,23 +1,23 @@
 use ratatui::prelude::Style;
-use crate::tasks::{self, IOProducer};
+use crate::app::models::{IOMessage, IOProducer};
 
 use super::{Home, StyledLine, IP, PointData, IPListItem, IOMode, Action, UnboundedSender, Result};
 
 /// Styles the incoming lines from either journalctl or fail2ban log.
 // Fail2Ban may send a String that contains multiple lines which are delimited by "++++".
 // Styled lines (saved in home.stored_styled_iostreamed) contain colored substrings / words.
-pub fn style_incoming_message(home: &mut Home, msg: tasks::IOMessage) {
+pub fn style_incoming_message(home: &mut Home, msg: IOMessage) {
   let mut dbg: String;
 
   home.last_username = String::from("");
 
   let prod: IOProducer;
   let collected = match msg {
-    tasks::IOMessage::SingleLine(x, p) => {
+    IOMessage::SingleLine(x, p) => {
       prod = p;
       vec![x]
     },
-    tasks::IOMessage::MultiLine(vx, p) => {
+    IOMessage::MultiLine(vx, p) => {
       prod = p;
       vx
     }
@@ -103,7 +103,7 @@ pub fn style_incoming_message(home: &mut Home, msg: tasks::IOMessage) {
 }
 
 /// Parses received IP geodata, calculates direction to home, passes to style message
-pub fn parse_passed_geo(home: &mut Home, x: IP, y: tasks::IOMessage, z: bool) -> Result<()> {
+pub fn parse_passed_geo(home: &mut Home, x: IP, y: IOMessage, z: bool) -> Result<()> {
   
   style_incoming_message(home, y.clone());
 

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{database::schema::{city::City, country::Country, ip::IP, isp::ISP, message::MiniMessage, region::Region}, tasks, themes::Themes};
+use crate::{database::schema::{city::City, country::Country, ip::IP, isp::ISP, message::MiniMessage, region::Region}, app::models::IOMessage, themes::Themes};
 use rusqlite::{Connection, Result};
 
 
@@ -116,14 +116,14 @@ pub enum Action {
   QueryNotFound(String),
 
   // Core
-  IONotify(tasks::IOMessage), // String tasks::IOMessage
+  IONotify(IOMessage), // String IOMessage
   //FetchGeo(gen_structs::Geodata),
 
   // second string is the line, bool is if it came from IO or DB
-  GotGeo(IP, tasks::IOMessage, bool),
+  GotGeo(IP, IOMessage, bool),
   //
   /// 0: IP, 1: Line, 2: true if from DB, false if fresh
-  PassGeo(IP, tasks::IOMessage, bool),
+  PassGeo(IP, IOMessage, bool),
 
   InternalLog(String),
   // Ban Actions

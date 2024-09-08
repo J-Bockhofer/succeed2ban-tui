@@ -26,7 +26,6 @@ use tui_input::{backend::crossterm::EventHandler, Input};
 
 use super::{Component, Frame};
 use crate::gen_structs::StatefulList;
-use crate::tasks::{IOMessage, IOProducer};
 use crate::themes::ThemeContainer;
 use crate::{action::Action, config::key_event_to_string, config::Config, themes, animations::Animation, database::schema, geofetcher};
 use crate::database::schema::{message, isp, city, region, country, ip};

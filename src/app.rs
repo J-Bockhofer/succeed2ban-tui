@@ -22,7 +22,6 @@ use crate::{
   config::Config,
   mode::Mode,
   tui,
-  tasks,
   geofetcher,
   gen_structs,
   database::schema::ip::IP,
@@ -32,6 +31,8 @@ use regex::Regex;
 
 mod f2b_watcher;
 mod jctl_watcher;
+pub mod models;
+
 
 pub struct App {
   pub config: Config,

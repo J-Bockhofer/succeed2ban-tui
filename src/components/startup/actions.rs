@@ -1,7 +1,7 @@
 use chrono::Utc;
 use rusqlite::Connection;
 
-use crate::{action::Action, database::schema::{self, city, country, ip::{self, IP}, isp, message, region}, geofetcher::{self, deserialize_geolocation, fetch_geolocation}, tasks::{self, IOMessage, IOProducer}};
+use crate::{action::Action, database::schema::{self, city, country, ip::{self, IP}, isp, message, region}, geofetcher::{self, deserialize_geolocation, fetch_geolocation}, app::models::{IOMessage, IOProducer}};
 
 use super::{Mode, Startup};
 
@@ -32,7 +32,7 @@ impl <'a> Startup <'a> {
         if results.is_empty() {
           // results were empty, might happen if journalctl sends error message -> in that case just insert the last ip into the message and try again
           if !self.last_ip.is_empty() && prod == IOProducer::Journal {
-            let msg = crate::tasks::IOMessage::SingleLine(format!("{} for {}", catmsg, self.last_ip), prod);
+            let msg = IOMessage::SingleLine(format!("{} for {}", catmsg, self.last_ip), prod);
             self.action_tx.clone().unwrap().send(Action::IONotify(msg))?;
           }
           return Ok(None)
@@ -122,7 +122,7 @@ fn geo_block_and_log(x: IP, is_ban: bool, meta: schema::MetaInfo, tx: tokio::syn
   }
 }
 
-fn fetch_geolocation_and_report(ip: String, is_banned: bool, original_message: tasks::IOMessage, tx: tokio::sync::mpsc::UnboundedSender<Action>) {
+fn fetch_geolocation_and_report(ip: String, is_banned: bool, original_message: IOMessage, tx: tokio::sync::mpsc::UnboundedSender<Action>) {
     tokio::task::spawn(async move {      
         let geodat = fetch_geolocation(ip.as_str()).await.unwrap_or(serde_json::Value::default());
         let geodata = deserialize_geolocation(geodat, is_banned);
