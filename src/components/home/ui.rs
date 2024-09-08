@@ -336,41 +336,6 @@ pub fn create_help<'a>(home: &'a Home) -> help::HelpOptions {
 
 }
 
-
-pub fn create_help_popup<'a>(home: &'a Home, help: help::HelpOptions) -> impl Widget + 'a {
-  //let help = create_help(home);
-
-  let headerstyle = Style::default().fg(home.apptheme.colors_app.text_color.color).bg(home.apptheme.colors_app.background_text_bright.color);
-  let linestyle = Style::default().fg(home.apptheme.colors_app.text_color.color);
-  let linestyle_alt: Style;
-  if home.apptheme.is_light {
-    linestyle_alt = Style::default().fg(home.apptheme.colors_app.text_color.color).bg(home.apptheme.colors_app.background_mid.shade(0.5));
-  } else {
-    linestyle_alt = Style::default().fg(home.apptheme.colors_app.text_color.color).bg(home.apptheme.colors_app.background_mid.color);
-  }
-  
-  let styles = ui::help::HelpStyles{
-    header: headerstyle,
-    opt: linestyle,
-    opt_alt: linestyle_alt,
-  };
-
-  let helptext = help.make_lines(styles);
-
-  let infoblock = Paragraph::new(helptext)
-  .set_style(Style::default())
-  .block(Block::default()
-  .bg(home.apptheme.colors_app.background_darkest.color)
-  .fg(home.apptheme.colors_app.background_text_bright.color)
-  .borders(Borders::ALL)
-  .border_style(Style::default().fg(home.apptheme.colors_app.text_color.color))
-  .title("Help"));
-  infoblock
-
-}
-
-
-
 pub fn create_query_popup<'a>(home: &'a Home)-> impl Widget + 'a {
 
   let querycursor = home.anim_querycursor.state.selected().unwrap();

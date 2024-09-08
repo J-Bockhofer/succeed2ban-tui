@@ -1,4 +1,4 @@
-use ratatui::{style::Style, text::{Line, Span}};
+use ratatui::{style::{Style, Styled, Stylize}, text::{Line, Span}, widgets::{Block, Borders, Paragraph, Widget}};
 
 
 
@@ -172,6 +172,8 @@ impl HelpOpt{
 // max key+1 + gap + name + gap + info || state + gap
 
 
+use crate::themes::Theme;
+
 use super::{pad_to_length, leftpad_to_length};
 
 pub fn make_opt_line<'a>(opt: &HelpOpt, linestyle: Style, max_lengths: &MaxLengths) -> Line<'a> {
@@ -239,3 +241,33 @@ pub fn make_header_line<'a>(linestyle: Style, max_lengths: &MaxLengths) -> Line<
 
    return Line::from(Span::styled(linestr, linestyle))
 }
+
+pub fn help_widget(theme: &Theme, help: HelpOptions) -> impl Widget + '_ {
+
+    let headerstyle = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_text_bright.color);
+    let linestyle = Style::default().fg(theme.colors_app.text_color.color);
+    let linestyle_alt: Style;
+    if theme.is_light {
+      linestyle_alt = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_mid.shade(0.5));
+    } else {
+      linestyle_alt = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_mid.color);
+    }
+    
+    let styles = HelpStyles{
+      header: headerstyle,
+      opt: linestyle,
+      opt_alt: linestyle_alt,
+    };
+  
+    let helptext = help.make_lines(styles);
+  
+    let infoblock = Paragraph::new(helptext)
+    .set_style(Style::default())
+    .block(Block::default()
+    .bg(theme.colors_app.background_darkest.color)
+    .fg(theme.colors_app.background_text_bright.color)
+    .borders(Borders::ALL)
+    .border_style(Style::default().fg(theme.colors_app.text_color.color))
+    .title("Help"));
+    infoblock
+  }

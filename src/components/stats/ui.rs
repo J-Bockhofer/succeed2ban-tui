@@ -572,36 +572,6 @@ pub fn create_help(config: Config) -> help::HelpOptions {
 
 }
 
-pub fn popup_help(theme: &Theme, help: help::HelpOptions) -> impl Widget + '_ {
-
-  let headerstyle = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_text_bright.color);
-  let linestyle = Style::default().fg(theme.colors_app.text_color.color);
-  let linestyle_alt: Style;
-  if theme.is_light {
-    linestyle_alt = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_mid.shade(0.5));
-  } else {
-    linestyle_alt = Style::default().fg(theme.colors_app.text_color.color).bg(theme.colors_app.background_mid.color);
-  }
-  
-  let styles = help::HelpStyles{
-    header: headerstyle,
-    opt: linestyle,
-    opt_alt: linestyle_alt,
-  };
-
-  let helptext = help.make_lines(styles);
-
-  let infoblock = Paragraph::new(helptext)
-  .set_style(Style::default())
-  .block(Block::default()
-  .bg(theme.colors_app.background_darkest.color)
-  .fg(theme.colors_app.background_text_bright.color)
-  .borders(Borders::ALL)
-  .border_style(Style::default().fg(theme.colors_app.text_color.color))
-  .title("Help"));
-  infoblock
-}
-
 pub fn popup_un_block_selected(stats: &Stats, is_block: bool) -> impl Widget + '_ {
   let smode = stats.selection_mode;
 
