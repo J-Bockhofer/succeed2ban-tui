@@ -17,13 +17,7 @@ Issues / Todos:
 
 1. Does not check for active ssh connections so you might ban yourself
 
-2. Actions need refactor badly
-
-3. Refactor for testing
-
-4. Text wrapping
-
-5. Bans are not correctly logged in the db
+2. Bans may not be correctly logged in the db
 
 
 Works off the default fail2ban log path @ `/var/log/fail2ban.log`
